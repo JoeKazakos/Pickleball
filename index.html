@@ -1,0 +1,3832 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Court Caller</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Courtside team-picking and running ratings for a Tuesday-night pickleball group.">
+<meta name="theme-color" content="#eceee8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1210" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..112,400..900&family=JetBrains+Mono:wght@400..700&display=swap">
+<style>
+/* ==========================================================================
+   Court Caller — the courtside instrument
+
+   The Almanac is the ledger: read at a desk, in prose, after the fact. This is
+   the other half — held in one hand, in a gym, by someone whose other hand has
+   a paddle in it. So: no prose face, no small type, no hover-only affordance.
+   Scoreboard condensation for names, tabular mono for every figure, and the
+   two teams colour-coded court-teal against ball-orange the whole way down so
+   a glance from the baseline resolves.
+
+   The one conceit: the matchup card is a net. Team over mesh over team, and
+   the win-probability bar is the net cord.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  --paper:  #eceee8;
+  --card:   #f7f8f4;
+  --sunk:   #e1e5dd;
+  --ink:    #13201c;
+  --ink-2:  #4c5a53;
+  --ink-3:  #7d8880;
+  --rule:   #d2d8cf;
+  --rule-2: #bac3b9;
+
+  --court:  #0a8c74;   /* team A, everywhere */
+  --ball:   #c9481e;   /* team B, everywhere */
+  --deep:   #3f55c0;   /* neutral readouts */
+  --court-w:#d9ece6;
+  --ball-w: #f7e2d9;
+  --deep-w: #dfe3f7;
+
+  --good:   #0a7d33;
+  --warn:   #9a6a00;
+  --crit:   #c0392f;
+
+  --shadow: 0 1px 2px rgba(19,32,28,.07), 0 10px 28px -18px rgba(19,32,28,.35);
+  --lift:   0 2px 4px rgba(19,32,28,.10), 0 16px 34px -20px rgba(19,32,28,.45);
+
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --grid:   #dfe3db;
+  /* Series hues, in the validated order. The first three clear the all-pairs
+     separation floors in both modes on their own; past three the lines also
+     carry a dash pattern, which is what keeps eight of them readable. */
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --wrap: 560px;
+  --pad: 16px;
+  --r: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper:  #0f1210;
+    --card:   #191c18;
+    --sunk:   #22261f;
+    --ink:    #eff2ec;
+    --ink-2:  #a6b0a9;
+    --ink-3:  #78827b;
+    --rule:   #2b2f2a;
+    --rule-2: #3b413a;
+    --court:  #17a489;
+    --ball:   #de5a2b;
+    --deep:   #6d82e8;
+    --court-w:#123029;
+    --ball-w: #35201a;
+    --deep-w: #1c2145;
+    --good:   #2ebb2e;
+    --warn:   #d9a11f;
+    --crit:   #e35c5c;
+    --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
+    --grid:   #262b25;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --lift:   0 2px 6px rgba(0,0,0,.6), 0 18px 40px -22px rgba(0,0,0,1);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper:  #0f1210;
+  --card:   #191c18;
+  --sunk:   #22261f;
+  --ink:    #eff2ec;
+  --ink-2:  #a6b0a9;
+  --ink-3:  #78827b;
+  --rule:   #2b2f2a;
+  --rule-2: #3b413a;
+  --court:  #17a489;
+  --ball:   #de5a2b;
+  --deep:   #6d82e8;
+  --court-w:#123029;
+  --ball-w: #35201a;
+  --deep-w: #1c2145;
+  --good:   #2ebb2e;
+  --warn:   #d9a11f;
+  --crit:   #e35c5c;
+  --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
+  --grid:   #262b25;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --lift:   0 2px 6px rgba(0,0,0,.6), 0 18px 40px -22px rgba(0,0,0,1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--pad); }
+
+/* ------------------------------------------------------------------ header */
+.top {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding-top: env(safe-area-inset-top);
+}
+.top-in {
+  max-width: var(--wrap); margin: 0 auto; padding: 10px var(--pad);
+  display: flex; align-items: baseline; gap: 10px;
+}
+.mark {
+  font-weight: 900; font-stretch: 82%; font-size: 19px;
+  letter-spacing: -.01em; margin: 0; white-space: nowrap;
+}
+.mark span { color: var(--court); }
+.top-meta {
+  margin-left: auto; min-width: 0; font-family: var(--mono); font-size: 11.5px;
+  color: var(--ink-3); font-variant-numeric: tabular-nums; text-align: right;
+  line-height: 1.3;
+}
+
+/* ------------------------------------------------------------- type basics */
+h2 {
+  font-size: 12px; font-weight: 800; font-stretch: 88%;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-3); margin: 0 0 10px;
+}
+.note { color: var(--ink-2); font-size: 13.5px; margin: 0; text-wrap: pretty; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+section { padding: 20px 0; border-top: 1px solid var(--rule); }
+section.first { border-top: 0; }
+
+/* ------------------------------------------------------------------ chips */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  font: inherit; font-weight: 650; font-size: 15px;
+  padding: 11px 14px; border-radius: 999px;
+  border: 1.5px solid var(--rule-2); background: var(--card); color: var(--ink-2);
+  cursor: pointer; display: inline-flex; align-items: baseline; gap: 7px;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.chip .r {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] {
+  background: var(--court); border-color: var(--court); color: #fff;
+}
+.chip[aria-pressed="true"] .r { color: rgba(255,255,255,.72); }
+
+/* ----------------------------------------------------------------- buttons */
+.btn {
+  font: inherit; font-weight: 750; font-size: 15px; font-stretch: 92%;
+  padding: 12px 16px; border-radius: var(--r);
+  border: 1.5px solid var(--rule-2); background: var(--card); color: var(--ink);
+  cursor: pointer; transition: background .12s, border-color .12s, opacity .12s;
+}
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--court); border-color: var(--court); color: #fff; }
+.btn.wide { width: 100%; }
+.btn.small {
+  /* every .btn.small rendered 37px tall; a thumb needs 44 */
+  font-size: 13.5px; padding: 12px 14px; font-weight: 650;
+}
+.btn.ghost { background: transparent; }
+/* Not opacity: fading a filled button composites its label down to 1.27:1,
+   which is invisible in gym light. A disabled control gets its own surface. */
+.btn:disabled {
+  cursor: not-allowed;
+  background: var(--sunk); border-color: var(--rule-2); color: var(--ink-2);
+}
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-row .btn { flex: 1; }
+
+:where(button, input, select, [tabindex]):focus-visible {
+  outline: 2.5px solid var(--deep); outline-offset: 2px;
+}
+
+/* ------------------------------------------------- the result slate
+   A planned game is a line to record, not a scoreboard to run. The old card
+   was a 300px net with 44px numerals and +/- steppers on every game; scores
+   get entered once, at the end, so what is needed is the matchup, the odds,
+   and somewhere to put two numbers.
+
+   The two sides keep their court-teal and ball-orange rails, because that is
+   how a team is identified everywhere else in the app, and it is what makes
+   the left number unambiguously the left team's. */
+.slate {
+  background: var(--card); border: 1px solid var(--rule);
+  border-radius: var(--r); box-shadow: var(--shadow);
+  padding: 10px 12px 12px; margin-bottom: 10px;
+}
+.round.now .slate { box-shadow: var(--lift); border-color: var(--rule-2); }
+
+.slatehead {
+  display: flex; align-items: baseline; gap: 10px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 7px;
+}
+.slatecap { margin-left: auto; letter-spacing: .04em; }
+
+.slateside {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center; gap: 10px;
+  padding: 5px 0 5px 10px; position: relative;
+}
+.slateside::before {
+  content: ""; position: absolute; left: 0; top: 3px; bottom: 3px; width: 4px;
+  border-radius: 2px;
+}
+.slateside.a::before { background: var(--court); }
+.slateside.b::before { background: var(--ball); }
+
+.sname {
+  font-weight: 800; font-stretch: 86%; font-size: clamp(16px, 4.6vw, 19px);
+  line-height: 1.2; letter-spacing: -.01em; overflow-wrap: anywhere;
+}
+
+.sscore {
+  font-family: var(--mono); font-weight: 700; font-size: 21px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  width: 56px; height: 44px; padding: 0; margin: 0;
+  border: 1.5px solid var(--ink-3); border-radius: 8px;
+  background: var(--paper); color: var(--ink);
+}
+.sscore:focus { outline: none; border-color: var(--deep); border-width: 2px; }
+
+.slateacts { display: flex; gap: 8px; margin-top: 10px; }
+.slateacts .btn { flex: 1; }
+.slateacts .btn.ghost { flex: 0 0 auto; }
+
+/* -------------------------------------------------------------- sit / meta */
+.sitrow {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+  margin-top: 11px; font-size: 13.5px; color: var(--ink-2);
+}
+.sitrow b {
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 800;
+}
+.sitname { font-weight: 700; }
+.sitname.due { color: var(--warn); }
+
+.why { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tag {
+  font-family: var(--mono); font-size: 11px; padding: 3px 8px;
+  border-radius: 5px; background: var(--sunk); color: var(--ink-2);
+  border: 1px solid var(--rule);
+}
+.tag.hot  { background: var(--deep-w); color: var(--deep); border-color: transparent; font-weight: 700; }
+.tag.warn { background: var(--ball-w); color: var(--ball); border-color: transparent; font-weight: 700; }
+
+/* ---------------------------------------------------------------- the log */
+.log {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--rule); border-radius: var(--r); overflow: hidden;
+  border: 1px solid var(--rule);
+}
+.logrow {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  gap: 9px; align-items: center; padding: 9px 11px; background: var(--card);
+}
+.logrow .n {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.logrow .who {
+  font-size: 13.5px; line-height: 1.32; min-width: 0; overflow-wrap: anywhere;
+}
+.logrow .won  { font-weight: 800; }
+.logrow .lost { color: var(--ink-3); }
+.logrow .sc {
+  font-family: var(--mono); font-weight: 700; font-size: 15px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.logrow .sc .u { color: var(--ink-3); font-weight: 400; }
+.logrow .x {
+  /* was 19x26 and 28px from the screen edge, in the thumb's scroll arc */
+  border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+  font: 400 20px/1 var(--display); padding: 10px 6px 10px 12px;
+  min-width: 44px; min-height: 44px;
+}
+
+/* ------------------------------------------------------------- standings */
+table.tally { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.tally th {
+  text-align: right; font-size: 10.5px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink-3); font-weight: 800;
+  padding: 0 0 6px 8px; border-bottom: 1px solid var(--rule); white-space: nowrap;
+}
+table.tally th:first-child { text-align: left; padding-left: 0; }
+table.tally td {
+  padding: 7px 0 7px 8px; border-bottom: 1px solid var(--rule);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  text-align: right; font-size: 13.5px; white-space: nowrap;
+}
+table.tally td:first-child {
+  text-align: left; padding-left: 0;
+  font-family: var(--display); font-weight: 700; font-size: 15px;
+}
+table.tally td.pos { color: var(--good); }
+table.tally td.neg { color: var(--crit); }
+table.tally td.dim { color: var(--ink-3); }
+table.tally tr:last-child td { border-bottom: 0; }
+.scroll-x { overflow-x: auto; }
+
+/* ------------------------------------------------------------ setup bits */
+.field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.field label {
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 800;
+}
+select, input[type="text"] {
+  font: inherit; font-size: 15px; padding: 9px 11px; border-radius: 8px;
+  border: 1.5px solid var(--rule-2); background: var(--card); color: var(--ink);
+}
+.seg { display: inline-flex; border: 1.5px solid var(--rule-2); border-radius: 999px; overflow: hidden; }
+.seg button {
+  font: inherit; font-weight: 700; font-size: 14px; padding: 8px 14px;
+  border: 0; background: var(--card); color: var(--ink-2); cursor: pointer;
+  border-right: 1.5px solid var(--rule-2);
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--court); color: #fff; }
+
+/* ------------------------------------------------------------ sticky bar */
+.bar {
+  position: sticky; bottom: 0; z-index: 20;
+  background: linear-gradient(to top, var(--paper) 64%, transparent);
+  padding: 14px var(--pad) calc(12px + env(safe-area-inset-bottom));
+  margin-top: 6px;
+}
+.bar-in { max-width: var(--wrap); margin: 0 auto; display: flex; gap: 8px; }
+.bar .btn { flex: 1; padding: 15px 16px; font-size: 16.5px; }
+.bar .btn.icon { flex: 0 0 auto; min-width: 56px; padding-left: 12px; padding-right: 12px; }
+
+.csvbox {
+  width: 100%; margin-top: 10px; padding: 10px; border-radius: 8px;
+  border: 1.5px solid var(--rule-2); background: var(--sunk); color: var(--ink-2);
+  font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  white-space: pre; resize: vertical;
+}
+
+.hidden { display: none !important; }
+
+.foot {
+  padding: 22px 0 34px; color: var(--ink-3); font-size: 12px;
+  border-top: 1px solid var(--rule); text-wrap: pretty; line-height: 1.55;
+}
+.foot code {
+  font-family: var(--mono); font-size: 11px; background: var(--sunk);
+  padding: 1px 5px; border-radius: 4px;
+}
+.foot p { margin: 0 0 8px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); font-weight: 650; font-size: 14px;
+  padding: 10px 16px; border-radius: 999px; z-index: 40; box-shadow: var(--lift);
+  pointer-events: none; opacity: 0; transition: opacity .18s;
+  max-width: calc(100vw - 32px); text-align: center;
+}
+.toast.on { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+/* ======================================================= section switching */
+.tabs {
+  max-width: var(--wrap); margin: 0 auto; padding: 0 var(--pad);
+  display: flex; gap: 4px;
+}
+.tabs button {
+  font: inherit; font-weight: 800; font-stretch: 88%; font-size: 13px;
+  letter-spacing: .05em; text-transform: uppercase;
+  padding: 13px 2px 12px; margin-right: 18px;
+  border: 0; border-bottom: 2.5px solid transparent; background: none;
+  color: var(--ink-3); cursor: pointer;
+}
+.tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--court); }
+
+/* ============================================================== priorities */
+.disclose {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: none; border: 0; padding: 0; color: var(--ink);
+  /* two columns so the chevron stays on the label's line; the summary spans
+     both underneath rather than pushing the chevron to a row of its own */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline; column-gap: 10px;
+}
+.disclose > span:first-child {
+  font-size: 12px; font-weight: 800; font-stretch: 88%;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.disclose::after {
+  content: "▾"; grid-column: 2; grid-row: 1;
+  color: var(--ink-3); font-size: 12px; transition: transform .15s;
+}
+.disclose[aria-expanded="true"]::after { transform: rotate(180deg); }
+.disclose-sum {
+  grid-column: 1 / -1; font-size: 13px; color: var(--court); font-weight: 650;
+  margin-top: 2px;
+}
+.prefs { margin-top: 14px; }
+.pri { display: flex; flex-direction: column; gap: 2px; margin-top: 12px; }
+.prirow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule);
+}
+.prirow:last-child { border-bottom: 0; }
+.prilab { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.prilab span {
+  display: block; font-size: 11px; font-weight: 600; color: var(--ink-3);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.seg.tiny button { padding: 7px 11px; font-size: 12.5px; min-width: 40px; }
+
+/* ============================================================ game options */
+.opt {
+  display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px;
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r);
+  padding: 13px 14px; margin-bottom: 10px;
+}
+.opt.lead { border-color: var(--court); box-shadow: var(--shadow); }
+.optn {
+  font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink-3);
+  padding-top: 2px;
+}
+.opt.lead .optn { color: var(--court); }
+.optbody { min-width: 0; }
+.optteams {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 800; font-stretch: 86%; font-size: clamp(17px, 4.6vw, 20px);
+  line-height: 1.18; letter-spacing: -.012em;
+}
+.optteams .amp { color: var(--ink-3); font-weight: 500; padding: 0 .1em; }
+.optteams .v {
+  font-size: 10.5px; font-weight: 800; color: var(--ink-3);
+  letter-spacing: .12em; text-transform: uppercase; padding: 1px 0;
+}
+.optacts { grid-column: 2; display: flex; gap: 8px; margin-top: 11px; min-width: 0; }
+.optacts .btn { flex: 1; }
+.optacts .btn.ghost { flex: 0 0 auto; }
+
+/* ================================================================== charts */
+.figure { margin: 16px 0 18px; }
+.figure figcaption {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  letter-spacing: .03em; margin-bottom: 8px;
+}
+.chartwrap { position: relative; width: 100%; }
+.chartwrap svg { display: block; overflow: visible; touch-action: pan-y; }
+
+.chip.swatch i {
+  width: 10px; height: 10px; border-radius: 3px; background: var(--sw);
+  display: inline-block; align-self: center;
+}
+.chip.swatch[aria-pressed="true"] i { box-shadow: 0 0 0 1.5px rgba(255,255,255,.85); }
+
+.tip {
+  position: absolute; bottom: 100%; transform: translateX(-50%);
+  background: var(--ink); color: var(--paper); border-radius: 8px;
+  padding: 8px 10px; font-size: 12px; line-height: 1.5; pointer-events: none;
+  box-shadow: var(--lift); white-space: nowrap; z-index: 5; margin-bottom: 6px;
+}
+.tip b {
+  display: block; font-family: var(--mono); font-size: 10.5px;
+  opacity: .7; margin-bottom: 3px; font-weight: 400;
+}
+.tip span { display: flex; align-items: center; gap: 6px; }
+.tip i { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.tip em {
+  font-family: var(--mono); font-style: normal; font-weight: 700;
+  margin-left: auto; padding-left: 12px; font-variant-numeric: tabular-nums;
+}
+
+td .dot {
+  width: 9px; height: 9px; border-radius: 3px; display: inline-block;
+  margin-right: 7px; vertical-align: baseline;
+}
+
+/* ------------------------------------------- suggestions: rounds and pairs
+   A suggestion can hold several games -- two courts running at once, or a
+   forced pair played back to back. It reads as one object with an internal
+   structure: a dashed rule between rounds, a lighter one between courts. */
+.optgame + .optgame {
+  margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--rule-2);
+}
+.optlab {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px;
+}
+.opt.lead .optgame:first-child .optlab { color: var(--court); }
+.sug-game + .sug-game { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--rule); }
+.sug-court {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); margin-bottom: 2px;
+}
+
+/* an alternative is a line to compare, not a card to study */
+.sug-game.compact {
+  /* a block: .sug-line owns the grid, and badges belong underneath it rather
+     than squeezed into a third column */
+  display: block; margin-top: 3px; padding-top: 0; border-top: 0;
+}
+.sug-game.compact + .sug-game.compact { margin-top: 5px; }
+.sug-game.compact .sug-court {
+  margin: 0; font-size: 10px; letter-spacing: 0; color: var(--ink-3);
+}
+.sug-teams { font-size: 14.5px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.sug-teams i { color: var(--ink-3); font-style: normal; font-weight: 400; }
+.sug-sit {
+  font-size: 12px; color: var(--ink-3); margin-top: 5px; font-family: var(--mono);
+}
+.opt.alt { padding: 11px 12px; }
+.opt.alt .optlab { margin-bottom: 2px; }
+.opt.alt .optgame + .optgame { margin-top: 8px; padding-top: 8px; }
+
+/* ------------------------------------------------------ the planned queue */
+.round { margin-bottom: 18px; }
+.round:last-child { margin-bottom: 0; }
+.roundhead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.roundhead > span:first-child {
+  /* the one word that says which game is live: 11px at --ink-3 measured
+     3.58:1, under the 4.5:1 floor */
+  font-size: 11.5px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-2);
+}
+.round.now .roundhead > span:first-child {
+  color: #fff; background: var(--court);
+  padding: 3px 8px; border-radius: 999px;
+}
+.roundsit {
+  font-size: 12.5px; color: var(--ink-3); margin-left: auto;
+  font-family: var(--mono);
+}
+
+/* ------------------------------------------------------------ game quality
+   One number, 0-100, where 100 is a coin flip. It replaces the win-probability
+   split: the point of a suggestion is how good the game will be, and being
+   told who wins it beforehand is the thing nobody wanted. The three bands are
+   sequential steps of one hue, not a good/bad status palette -- this is a
+   magnitude, and it is never the only thing on the row. */
+.qrow, .slateq {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 9px; margin-top: 9px;
+}
+.slateq { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--rule); }
+.qlab {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
+}
+.qmeter {
+  height: 6px; border-radius: 3px; background: var(--sunk);
+  overflow: hidden; min-width: 40px;
+}
+.qmeter i { display: block; height: 100%; border-radius: 3px; }
+.qmeter i.hi  { background: var(--court); }
+.qmeter i.mid { background: color-mix(in srgb, var(--court) 55%, var(--sunk)); }
+.qmeter i.lo  { background: color-mix(in srgb, var(--court) 28%, var(--sunk)); }
+.qnum {
+  font-family: var(--mono); font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; min-width: 2.4ch; text-align: right;
+}
+.qnum.hi  { color: var(--court); }
+.qnum.mid { color: var(--ink); }
+.qnum.lo  { color: var(--ink-3); }
+
+/* later rounds sit flatter, so the game on court still reads first */
+.slate.later { box-shadow: none; background: transparent; border-style: dashed; }
+
+/* ------------------------------------------------------- an unplanned game */
+.cteam {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px;
+  gap: 8px; align-items: center; padding: 7px 0 7px 10px; position: relative;
+}
+.cteam::before {
+  content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 4px;
+  border-radius: 2px;
+}
+.cteam.a::before { background: var(--court); }
+.cteam.b::before { background: var(--ball); }
+.cpick {
+  font: inherit; font-size: 15px; font-weight: 650;
+  padding: 11px 8px; border-radius: 8px; min-width: 0;
+  border: 1.5px solid var(--rule-2); background: var(--card); color: var(--ink);
+}
+.cscore {
+  font-family: var(--mono); font-weight: 700; font-size: 19px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  width: 56px; height: 44px; padding: 0;
+  border: 1.5px solid var(--ink-3); border-radius: 8px;
+  background: var(--paper); color: var(--ink);
+}
+.cscore:focus, .cpick:focus {
+  outline: none; border-color: var(--deep); border-width: 2px;
+}
+.cnote { margin: 10px 0 12px; }
+
+/* ------------------------------------------------------------ the dialog
+   A published Artifact is a sandboxed iframe, where window.confirm is ignored
+   and returns false -- so every guarded action quietly did nothing. This is
+   the confirmation instead. */
+.dialog {
+  position: fixed; inset: 0; z-index: 60; display: none;
+  align-items: center; justify-content: center; padding: 22px;
+  background: color-mix(in srgb, var(--ink) 42%, transparent);
+}
+.dialog.on { display: flex; }
+.dialogbox {
+  background: var(--card); border: 1px solid var(--rule-2);
+  border-radius: var(--r); box-shadow: var(--lift);
+  padding: 18px 18px 14px; max-width: 340px; width: 100%;
+}
+.dialogmsg { margin: 0 0 16px; font-size: 15px; line-height: 1.45; text-wrap: pretty; }
+.dialogacts { display: flex; gap: 8px; }
+.dialogacts .btn { flex: 1; }
+.btn.danger { background: var(--crit); border-color: var(--crit); color: #fff; }
+
+/* --------------------------------------------------- adding someone new */
+.addrow { margin-top: 10px; }
+.addrow input {
+  flex: 1 1 140px; min-width: 0;
+  font: inherit; font-size: 15px; padding: 11px 12px; border-radius: 8px;
+  border: 1.5px solid var(--rule-2); background: var(--card); color: var(--ink);
+}
+.addrow input:focus { outline: none; border-color: var(--deep); border-width: 2px; }
+
+/* ------------------------------------------- editing a score after the fact */
+.logrow .sc { display: flex; align-items: center; gap: 3px; }
+.logrow .sc i { color: var(--ink-3); font-style: normal; }
+.logscore {
+  font-family: var(--mono); font-weight: 700; font-size: 15px;
+  font-variant-numeric: tabular-nums; text-align: center;
+  width: 36px; height: 34px; padding: 0;
+  border: 1.5px solid var(--rule); border-radius: 6px;
+  background: var(--paper); color: var(--ink);
+}
+.logscore:focus { outline: none; border-color: var(--deep); border-width: 2px; }
+
+/* badges under a compact option */
+.sug-line {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline; gap: 9px;
+}
+.sug-game.small .sug-line { grid-template-columns: auto minmax(0, 1fr); }
+.sug-game.small .sug-court { color: var(--deep); font-weight: 700; }
+.sug-game.compact .why { margin-top: 5px; }
+
+/* --------------------------------------- singles, three-ways and details */
+.subhead {
+  font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--ink-3);
+  margin: 18px 0 6px; padding-top: 14px; border-top: 1px solid var(--rule);
+}
+#smallPrefs { margin-top: 10px; }
+
+/* a third side, for a three-way */
+.slateside.c::before { background: var(--deep); }
+.slate.small { border-style: dashed; }
+.slate.small .sname { font-size: clamp(15px, 4.2vw, 17px); }
+.slateq .qlab { white-space: normal; }
+
+.smalltag {
+  font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--deep);
+  background: var(--deep-w); border-radius: 4px; padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.details {
+  grid-column: 2; margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed var(--rule-2);
+}
+.dtable { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.dtable th {
+  text-align: left; font-weight: 650; color: var(--ink-3);
+  padding: 4px 8px 4px 0; white-space: nowrap; vertical-align: top;
+  font-size: 11.5px;
+}
+.dtable td { padding: 4px 0; color: var(--ink); vertical-align: top; }
+.dtable td.dnote {
+  color: var(--court); font-family: var(--mono); font-size: 11px;
+  text-align: right; padding-left: 8px;
+}
+
+/* ------------------------------------------------------ the visible range */
+.rangewrap { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.rangewrap input[type="range"] {
+  width: 100%; margin: 0; height: 22px; accent-color: var(--court);
+  background: transparent;
+}
+.rangewrap input[type="range"]:focus-visible { outline: 2.5px solid var(--deep); }
+
+/* ------------------------------------------------------- game by game
+   Each fitted point is a refit, so the step from one to the next is exactly
+   what that game did. Only the players who were on court are shown; everyone
+   else moved because the window slid, which is bookkeeping, not a result. */
+.impact {
+  max-height: 420px; overflow-y: auto; border: 1px solid var(--rule);
+  border-radius: var(--r); background: var(--card);
+}
+.irow {
+  padding: 9px 12px; border-bottom: 1px solid var(--rule);
+  transition: background .12s;
+}
+.irow:last-child { border-bottom: 0; }
+.irow.on { background: var(--court-w); box-shadow: inset 3px 0 0 var(--court); }
+.ihead {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline; gap: 8px;
+}
+.idate {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  white-space: nowrap;
+}
+.iteams { font-size: 13.5px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.iteams i { color: var(--ink-3); font-style: normal; font-weight: 400; }
+.iscore {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.ideltas { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; }
+.idelta {
+  font-size: 11.5px; color: var(--ink-2);
+  font-family: var(--mono); white-space: nowrap;
+}
+.idelta b { font-weight: 700; }
+.idelta.up b { color: var(--good); }
+.idelta.down b { color: var(--crit); }
+.idelta.dim { color: var(--ink-3); }
+
+/* ------------------------------------------------- the game-quality floor
+   Closeness is a constraint rather than a weight: the slider says how bad a
+   game you are willing to be offered, and anything below it is not shown. */
+.qfloor { padding: 7px 0 12px; border-bottom: 1px solid var(--rule); }
+.qfloorrow { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.qfloorrow input[type="range"] {
+  flex: 1 1 auto; min-width: 0; margin: 0; height: 30px;
+  accent-color: var(--court); background: transparent;
+}
+.qfloorrow input[type="range"]:focus-visible { outline: 2.5px solid var(--deep); }
+.qscale {
+  display: flex; justify-content: space-between; margin-top: 2px;
+  padding-right: 52px;      /* clear of the value readout */
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+}
+.qfloorval {
+  font-family: var(--mono); font-size: 17px; font-weight: 700;
+  color: var(--court); font-variant-numeric: tabular-nums;
+  min-width: 3.2ch; text-align: right;
+}
+
+/* ---------------------------------------------- chart and log side by side
+   On a phone these stack, chart first. Given the width they sit together, so
+   the game the crosshair is on is visible at the same time as the crosshair --
+   which is the whole point of highlighting it. */
+.ratinglayout { margin-top: 4px; }
+.ratingside { margin-top: 26px; }
+
+@media (min-width: 880px) {
+  #tabRatings { max-width: 1080px; }
+  body.wide .top-in, body.wide .tabs { max-width: 1080px; }
+  .ratinglayout {
+    display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+    gap: 28px; align-items: start;
+  }
+  .ratingside { margin-top: 0; }
+  .ratingside .impact { max-height: 520px; }
+  /* the chart stays put while the list scrolls beside it */
+  .ratingmain { position: sticky; top: 118px; }
+}
+
+/* ------------------------------------------------------- the data source */
+#sourceUrl { font-family: var(--mono); font-size: 12.5px; }
+.note.good { color: var(--good); }
+.note.bad  { color: var(--crit); }
+#shareOut .csvbox { white-space: pre-wrap; word-break: break-all; }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-in">
+    <p class="mark">COURT <span>CALLER</span></p>
+    <div class="top-meta" id="topMeta"></div>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="tonight" aria-pressed="true">Tonight</button>
+    <button type="button" data-tab="ratings" aria-pressed="false">Ratings</button>
+  </nav>
+</header>
+
+<!-- =================================================== 1 · picking games -->
+<main class="wrap" id="tabTonight">
+
+  <section class="first">
+    <button class="disclose" id="rosterToggle" aria-expanded="true" aria-controls="rosterBody">
+      <span>Who&rsquo;s here</span>
+      <span class="disclose-sum" id="rosterSum"></span>
+    </button>
+    <div id="rosterBody">
+      <div class="chips" id="roster"></div>
+      <div class="field addrow">
+        <input type="text" id="newName" placeholder="Someone new" autocomplete="off"
+               maxlength="18" aria-label="Name of someone not on the list">
+        <button class="btn small" id="newAdd">Add</button>
+      </div>
+      <p class="note" id="hereNote"></p>
+    </div>
+  </section>
+
+  <section>
+    <button class="disclose" id="prefsToggle" aria-expanded="false" aria-controls="prefs">
+      <span>What matters tonight</span>
+      <span class="disclose-sum" id="prefsSum"></span>
+    </button>
+    <div id="prefs" class="prefs hidden">
+      <p class="note">Slide toward what you want. Even court time is held fixed
+      &mdash; that one is not a preference. Sitting twice running is avoided too,
+      except where one round leaves exactly the other: preventing it there would
+      lock the same fours together all night.</p>
+      <div class="qfloor">
+        <div class="prilab">Close games<span>only suggest games at least this good</span></div>
+        <div class="qfloorrow">
+          <input type="range" id="minQ" min="0" max="11" step="1" value="1"
+                 list="qticks" aria-label="Minimum game quality">
+          <datalist id="qticks">
+            <option value="0"></option><option value="1"></option>
+            <option value="2"></option><option value="3"></option>
+            <option value="4"></option><option value="5"></option>
+            <option value="6"></option><option value="7"></option>
+            <option value="8"></option><option value="9"></option>
+            <option value="10"></option><option value="11"></option>
+          </datalist>
+          <span class="qfloorval" id="minQVal">50</span>
+        </div>
+        <!-- endpoints only: the 50 notch sits second from the left, so a
+             centred "50" label would point at the wrong tick -->
+        <div class="qscale"><span>any</span><span>100</span></div>
+      </div>
+
+      <div class="pri" id="priList"></div>
+
+      <div class="subhead">Up for singles or a three-way</div>
+      <p class="note">When two or three are left over and a court is free, they
+      play rather than sit. Tap anyone who would rather wait for a proper game.</p>
+      <div class="chips" id="smallPrefs"></div>
+      <div class="field">
+        <label for="courtSeg">Courts</label>
+        <div class="seg tiny" id="courtSeg">
+          <button type="button" data-c="1" aria-pressed="true">1</button>
+          <button type="button" data-c="2" aria-pressed="false">2</button>
+          <button type="button" data-c="3" aria-pressed="false">3</button>
+        </div>
+      </div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn small ghost" data-preset="balanced">Even games</button>
+        <button class="btn small ghost" data-preset="social">Mix it up</button>
+        <button class="btn small ghost" data-preset="fresh">Never seen it</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- on court now, and queued behind it -->
+  <section id="planSec" class="hidden">
+    <h2 id="planHead">Planned</h2>
+    <div id="plan"></div>
+  </section>
+
+  <!-- what to add to the plan -->
+  <section id="sugSec">
+    <h2 id="sugHead">Suggestions</h2>
+    <p class="note" id="sugNote" style="margin-bottom:12px"></p>
+    <div id="suggestions"></div>
+  </section>
+
+  <!-- finished, and not in the sheet until tomorrow -->
+  <section id="playedSec" class="hidden">
+    <h2 id="playedHead">Played tonight</h2>
+    <div class="log" id="log"></div>
+    <div class="scroll-x" style="margin-top:16px">
+      <table class="tally">
+        <thead>
+          <tr><th>Player</th><th>W</th><th>L</th><th>Pts&nbsp;+/&minus;</th><th>Sat</th><th>Queued</th></tr>
+        </thead>
+        <tbody id="tallyBody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row" style="margin-top:14px">
+      <button class="btn small ghost" id="btnCsv">Copy tonight as CSV</button>
+      <button class="btn small ghost" id="btnReset">End night</button>
+    </div>
+    <div id="csvOut" class="hidden"></div>
+  </section>
+
+  <!-- a game that never went through the planner -->
+  <section id="customSec">
+    <h2>Add a game we just played</h2>
+    <p class="note" style="margin-bottom:12px">For a game nobody planned. It goes
+    straight into tonight&rsquo;s log, the standings and the CSV.</p>
+    <div id="custom"></div>
+  </section>
+
+  <!-- where the games come from -->
+  <section id="sourceSec">
+    <button class="disclose" id="sourceToggle" aria-expanded="false" aria-controls="sourceBody">
+      <span>Where the games come from</span>
+      <span class="disclose-sum" id="sourceSum"></span>
+    </button>
+    <div id="sourceBody" class="hidden">
+      <p class="note">A Google Sheet published to the web as CSV
+      (<b>File &rarr; Share &rarr; Publish to web</b>, then pick <b>Comma-separated
+      values</b>). Columns: Date, Team 1 - Player 1, Team 1 - Player 2,
+      Team 2 - Player 1, Team 2 - Player 2, Team 1 Score, Team 2 Score. Every name
+      in the app is read from that file &mdash; nothing is built in.</p>
+      <div class="field addrow">
+        <input type="text" id="sourceUrl" autocomplete="off" spellcheck="false"
+               placeholder="https://docs.google.com/.../pub?output=csv"
+               aria-label="CSV address for the game log">
+        <button class="btn small" id="sourceLoad">Load</button>
+      </div>
+      <p class="note" id="sourceStatus" style="margin-top:10px"></p>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn small ghost" id="sourceShare">Copy a link with this source</button>
+        <button class="btn small ghost" id="sourceReset">Back to the built-in copy</button>
+      </div>
+      <div id="shareOut" class="hidden"></div>
+    </div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<!-- ====================================================== 2 · the ratings -->
+<main class="wrap hidden" id="tabRatings">
+
+  <section class="first">
+    <h2>Form over time</h2>
+    <p class="note">Ridge regression (&alpha;&nbsp;=&nbsp;0.5) on score differential,
+    refitted on a sliding window. A player&rsquo;s value is the points per game they
+    add to their team, so a matchup&rsquo;s expected margin is one side&rsquo;s two
+    values minus the other&rsquo;s.</p>
+
+    <div class="field">
+      <label for="winSeg">Window</label>
+      <div class="seg" id="winSeg">
+        <button type="button" data-w="20" aria-pressed="false">20</button>
+        <button type="button" data-w="40" aria-pressed="true">40</button>
+        <button type="button" data-w="80" aria-pressed="false">80</button>
+        <button type="button" data-w="150" aria-pressed="false">150</button>
+        <button type="button" data-w="0" aria-pressed="false">All</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="modeSeg">Lines</label>
+      <div class="seg" id="modeSeg">
+        <button type="button" data-m="together" aria-pressed="true">Together</button>
+        <button type="button" data-m="separate" aria-pressed="false">Separate</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="fromR">Range</label>
+      <div class="rangewrap">
+        <input type="range" id="fromR" min="0" max="100" value="0" step="1"
+               aria-label="First game shown">
+        <input type="range" id="toR" min="0" max="100" value="100" step="1"
+               aria-label="Last game shown">
+      </div>
+      <button class="btn small ghost" id="rangeAll">All</button>
+    </div>
+    <p class="note" id="rangeNote" style="margin-top:6px"></p>
+
+    <div class="chips" id="chartPick" style="margin-top:14px"></div>
+
+    <div class="ratinglayout">
+      <div class="ratingmain">
+        <figure class="figure" id="figure">
+          <figcaption id="figCap"></figcaption>
+          <div class="chartwrap" id="chartWrap"></div>
+        </figure>
+        <p class="note" id="ratingNote"></p>
+      </div>
+
+      <div class="ratingside">
+        <h2 id="impactHead">Game by game</h2>
+        <p class="note" style="margin-bottom:10px">What adding each game did to
+        the rating of the players in it, holding the rest of the window fixed
+        &mdash; so a winner never shows a fall because an old game dropped off the
+        back. It adds up to zero. Hover the chart and the matching game lights up.</p>
+        <div class="impact" id="impact"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot" id="foot2"></footer>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="dialog" id="dialog"></div>
+
+<script id="pb-data" type="application/json">{"csv":"","url":""}</script>
+<script>
+/* Pickleball model math — a direct port of src/rally.py and src/final_model.py.
+ *
+ * Everything the interactive tools need runs client-side from eleven numbers
+ * (the fitted player strengths), so the page has no backend.
+ *
+ * Verified against the Python implementation to 1e-12 by web/verify.js.
+ */
+
+// ---------------------------------------------------------------- log-gamma
+// Lanczos approximation, g=7, n=9. Accurate to ~1e-13 for x > 0.
+const LANCZOS = [
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+  771.32342877765313, -176.61502916214059, 12.507343278686905,
+  -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+];
+
+function lgamma(x) {
+  if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x);
+  x -= 1;
+  let a = LANCZOS[0];
+  const t = x + 7.5;
+  for (let i = 1; i < 9; i++) a += LANCZOS[i] / (x + i);
+  return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+const logChoose = (n, k) => lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1);
+
+const sigmoid = (x) => 1 / (1 + Math.exp(-x));
+
+// ------------------------------------------------- rally prob -> game prob
+/**
+ * P(win a game to `target`, win by 2) given a constant per-rally win
+ * probability `p`.  Exact: regulation is a negative-binomial sum, and the
+ * deuce phase is a two-state random walk with closed form p²/(p²+q²).
+ */
+function gameWinProb(p, target = 11) {
+  p = Math.min(Math.max(p, 1e-9), 1 - 1e-9);
+  const q = 1 - p, T = target;
+  let reg = 0;
+  for (let j = 0; j <= T - 2; j++) {
+    // C(T-1+j, j) p^T q^j  — reach T points with the opponent on j
+    reg += Math.exp(lgamma(T + j) - lgamma(j + 1) - lgamma(T)
+                    + T * Math.log(p) + j * Math.log(q));
+  }
+  const pDeuce = Math.exp(logChoose(2 * T - 2, T - 1)
+                          + (T - 1) * Math.log(p) + (T - 1) * Math.log(q));
+  return reg + pDeuce * (p * p) / (p * p + q * q);
+}
+
+/** Inverse of gameWinProb, by bisection. */
+function invertGameProb(pWin, target = 11) {
+  let lo = 1e-4, hi = 1 - 1e-4;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (gameWinProb(mid, target) < pWin) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+// --------------------------------------------------- win prob from a score
+/**
+ * P(team A wins | current score a-b), same rally model.
+ *
+ * Solved as a dynamic program backwards over the score lattice.  Any state at
+ * or past (T-1, T-1) collapses to the deuce walk, whose value depends only on
+ * the current point difference (-1, 0, +1), so the lattice stays finite.
+ */
+function winProbFromScore(a, b, p, target = 11) {
+  const T = target, q = 1 - p;
+  const deuce = (p * p) / (p * p + q * q);            // even, need +2
+  const fromDiff = (d) => (d >= 1 ? p + q * deuce : d <= -1 ? p * deuce : deuce);
+
+  if (a >= T && a - b >= 2) return 1;
+  if (b >= T && b - a >= 2) return 0;
+  if (a >= T - 1 && b >= T - 1) return fromDiff(a - b);
+
+  // memoised recursion over states below the deuce boundary
+  const memo = new Map();
+  const f = (x, y) => {
+    if (x >= T && x - y >= 2) return 1;
+    if (y >= T && y - x >= 2) return 0;
+    if (x >= T - 1 && y >= T - 1) return fromDiff(x - y);
+    const key = x * 100 + y;
+    if (memo.has(key)) return memo.get(key);
+    const v = p * f(x + 1, y) + q * f(x, y + 1);
+    memo.set(key, v);
+    return v;
+  };
+  return f(a, b);
+}
+
+/**
+ * Points the weaker team should be spotted to bring the game nearest a coin
+ * flip.  Returns the *closest* whole number, not the first that clears 50% —
+ * an already-even matchup needs no spot at all, and at the extremes no integer
+ * lands on 0.5 (8 points leaves one pair at 42%, 9 puts them at 71%).
+ */
+function handicap(p, target = 11) {
+  let best = 0, bestErr = Infinity;
+  for (let h = 0; h <= target - 1; h++) {
+    const pw = p < 0.5 ? winProbFromScore(h, 0, p, target)
+                       : 1 - winProbFromScore(0, h, p, target);
+    const err = Math.abs(pw - 0.5);
+    if (err < bestErr) { bestErr = err; best = h; }
+  }
+  return best;
+}
+
+// ------------------------------------------------------------ expected score
+/**
+ * (P(the p-side wins in regulation), E[opponent's points] weighted by that P).
+ */
+function regulation(p, target = 11) {
+  const T = target;
+  let pw = 0, ew = 0;
+  for (let j = 0; j <= T - 2; j++) {
+    const w = Math.exp(lgamma(T + j) - lgamma(j + 1) - lgamma(T)
+                       + T * Math.log(Math.max(p, 1e-12))
+                       + j * Math.log(Math.max(1 - p, 1e-12)));
+    pw += w; ew += w * j;
+  }
+  return [pw, ew];
+}
+
+/**
+ * (P(reach deuce), P(the p-side wins from deuce), E[extra points each side gets]).
+ * From (T-1, T-1) the game runs in two-rally rounds: a split (2pq) adds a point
+ * to each side and returns to deuce, anything else ends it +2/+0.
+ */
+function deuce(p, target = 11) {
+  const q = 1 - p, T = target;
+  const pd = Math.exp(logChoose(2 * T - 2, T - 1)
+                      + (T - 1) * Math.log(p) + (T - 1) * Math.log(q));
+  const s = p * p + q * q;
+  return [pd, (p * p) / s, (1 - s) / s];
+}
+
+/** E[the p-side's points | it lost in regulation]. Regulation only. */
+function expLoserPoints(p, target = 11) {
+  const [pw, ew] = regulation(1 - p, target);
+  return pw > 0 ? ew / pw : 0;
+}
+
+/**
+ * Expected final score, counting all three ways a game ends: either side
+ * winning in regulation, or a deuce that runs long. Ignoring the deuce branch
+ * biases every predicted scoreline down by about half a point, because
+ * overtime adds points to both sides.
+ *
+ * Verified against a 200,000-game simulation to within 0.01 points.
+ */
+function expectedScore(p, target = 11) {
+  const [pw, ew] = regulation(p, target);
+  const [pl, el] = regulation(1 - p, target);
+  const [pd, dwin, ek] = deuce(p, target);
+  return [
+    pw * target + el + pd * (dwin * (target + 1) + (1 - dwin) * (target - 1) + ek),
+    pl * target + ew + pd * ((1 - dwin) * (target + 1) + dwin * (target - 1) + ek),
+  ];
+}
+
+// ----------------------------------------------------------------- ratings
+/**
+ * The fitted model.  `strengths` maps player -> raw Bradley-Terry coefficient
+ * (per-rally log-odds); `temp` is the calibration temperature.
+ */
+class Model {
+  /**
+   * `temp` calibrates the binary win probability; `marginTemp` calibrates the
+   * scoreline.  They differ because the same softening that fixes
+   * over-confidence in who wins also compresses the predicted margin. The
+   * regression of actual on expected margin has slope 0.986 at 1.0 and 1.017
+   * at 1.05, so the scoreline path calibrates at 1.02.
+   */
+  constructor(strengths, temp = 1.2, marginTemp = 1.02) {
+    this.s = strengths;
+    this.temp = temp;
+    this.marginTemp = marginTemp;
+  }
+  str(p) { return this.s[p] ?? 0; }
+  gap(teamA, teamB) {
+    return teamA.reduce((t, p) => t + this.str(p), 0)
+         - teamB.reduce((t, p) => t + this.str(p), 0);
+  }
+  rallyProb(teamA, teamB) { return sigmoid(this.gap(teamA, teamB) / this.temp); }
+  rallyProbMargin(teamA, teamB) { return sigmoid(this.gap(teamA, teamB) / this.marginTemp); }
+  /**
+   * Per-rally probability for the side-out chain. Untempered on purpose: the
+   * temperature exists to correct the independent-rally model's overconfidence,
+   * and the side-out chain does not have that problem -- fitting one to it
+   * moves the walk-forward log loss by 0.0001.
+   */
+  rallyProbSideOut(teamA, teamB) { return sigmoid(this.gap(teamA, teamB)); }
+  winProb(teamA, teamB, target = 11) {
+    return gameWinProb(this.rallyProb(teamA, teamB), target);
+  }
+  expectedScore(teamA, teamB, target = 11) {
+    return expectedScore(this.rallyProbMargin(teamA, teamB), target);
+  }
+  handicap(teamA, teamB, target = 11) {
+    return handicap(this.rallyProb(teamA, teamB), target);
+  }
+  /** Simulate one game rally by rally. */
+  simGame(teamA, teamB, target = 11, rand = Math.random) {
+    const p = this.rallyProb(teamA, teamB);
+    let a = 0, b = 0;
+    while (!(Math.max(a, b) >= target && Math.abs(a - b) >= 2)) {
+      if (rand() < p) a++; else b++;
+    }
+    return [a, b];
+  }
+}
+
+// ------------------------------------------------------- deterministic RNG
+/** mulberry32 — small, fast, seedable, good enough for scheduling. */
+function rng(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+
+/* Court Caller — the courtside half of the Pickleball Almanac.
+ *
+ * Two jobs. Pick the next game, from who actually turned up and what the group
+ * says it wants tonight. And show where everyone's form is, as a rating that
+ * moves.
+ *
+ * One rating system throughout: ridge regression (alpha = 0.5) of score
+ * differential on a +1/-1 team design matrix. A player's coefficient is the
+ * points per game they add to their side, which makes a matchup's expected
+ * margin just one team's two values minus the other's. Win probability is not
+ * a second model -- the margin is pushed through the same exact race-to-11
+ * mathematics the Almanac uses (pbmath.js, verified against the Python to
+ * 1e-15), by solving for the per-rally probability that produces it.
+ *
+ * Data comes from the published sheet. A snapshot is baked in at build time so
+ * the file works with no signal in a gym; on load it tries the live sheet and
+ * upgrades if it can reach it. An Artifact's CSP blocks that fetch, so there
+ * the snapshot is what you get -- the header says which is on screen.
+ */
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+const BOOT = JSON.parse(document.getElementById("pb-data").textContent);
+// v3: the single live game became a plan queue, so a v2 payload would
+// restore the played log and silently drop whatever was on court.
+const KEY = "courtCaller.v3";
+
+/* ==================================================================== data */
+
+/** The log, oldest first. Ties on date keep sheet order, as src/data.py does. */
+function parseCsv(text) {
+  const rows = text.trim().split(/\r?\n/).map((l) => l.split(",").map((c) => c.trim()));
+  const out = [];
+  rows.slice(1).forEach((r, i) => {
+    if (r.length < 7 || !r[0]) return;
+    const [m, d, y] = r[0].split("/").map(Number);
+    const sa = Number(r[5]), sb = Number(r[6]);
+    if (!y || isNaN(sa) || isNaN(sb)) return;
+    out.push({
+      date: r[0], t: Date.UTC(y, m - 1, d), row: i,
+      a: [r[1], r[2]], b: [r[3], r[4]], sa, sb,
+    });
+  });
+  out.sort((x, y) => x.t - y.t || x.row - y.row);
+  return out;
+}
+
+let LOG = parseCsv(BOOT.csv || "");    // may be empty: a build for a public
+let SOURCE = BOOT.csv ? "snapshot" : "none";   // host carries no data at all
+
+/** The address in use: the link's ?csv= beats a saved one beats the built-in. */
+function sourceUrl() {
+  return linkSource() || S.sourceUrl || BOOT.url || "";
+}
+
+/** A ?csv= on the address bar, so one link can carry the whole setup. */
+function linkSource() {
+  try {
+    const v = new URLSearchParams(location.search).get("csv");
+    return v ? v.trim() : "";
+  } catch (e) { return ""; }
+}
+
+const lastDate = () => (LOG.length ? LOG[LOG.length - 1].date : "\u2014");
+
+/** Tonight's games appended, so ratings and novelty both see them. */
+const allGames = () => LOG.concat(S.games.filter((g) => !isSmall(g)).map((g) => ({
+  date: todayStr(), t: Date.now(), row: 1e6, a: g.a, b: g.b, sa: g.sa, sb: g.sb, tonight: true,
+})));
+
+/* A game has two sides, or -- when three people are left over and a court is
+ * free -- three. Every side is an array, so one accessor covers doubles,
+ * singles and a three-way, and nothing silently drops the third player.
+ *
+ * Small games are logged and count for court time, but they are kept out of
+ * the ratings and the CSV: the sheet has exactly four player columns, and a
+ * rating that means "points per game added to your doubles team" should not be
+ * fitted on singles. */
+const sidesOf = (g) => (g.c ? [g.a, g.b, g.c] : [g.a, g.b]);
+const playersOf = (g) => (g.c ? g.a.concat(g.b, g.c) : g.a.concat(g.b));
+const isSmall = (g) => !!g.kind && g.kind !== "doubles";
+const scoresOf = (g) => (g.c ? [g.sa, g.sb, g.sc] : [g.sa, g.sb]);
+const SMALL_LABEL = { singles: "singles", cutthroat: "three-way" };
+
+function rosterOf(games) {
+  const n = new Set();
+  games.forEach((g) => playersOf(g).forEach((p) => n.add(p)));
+  return Array.from(n).sort();
+}
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+};
+
+/* ============================================================ ridge model */
+
+/** Solve Ax = b by Gaussian elimination with partial pivoting. k is <= ~14. */
+function solveLin(A, b) {
+  const n = b.length;
+  const M = A.map((row, i) => row.concat([b[i]]));
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    const d = M[c][c] || 1e-12;
+    for (let j = c; j <= n; j++) M[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c];
+      if (!f) continue;
+      for (let j = c; j <= n; j++) M[r][j] -= f * M[c][j];
+    }
+  }
+  return M.map((row) => row[n]);
+}
+
+/**
+ * Ridge on the score differential. X has +1 for each player on team 1 and -1
+ * for each on team 2; y is (team 1 score - team 2 score). No intercept: every
+ * row sums to zero and the target is already a difference.
+ *
+ * Returns coefficients and the games each player actually appears in, because
+ * a player absent from the window is not rated 0 -- they are unrated, and the
+ * chart has to break the line rather than draw them at average.
+ */
+const ALPHA = 0.5;
+function ridge(games, players) {
+  const k = players.length;
+  const ix = Object.fromEntries(players.map((p, i) => [p, i]));
+  const XtX = Array.from({ length: k }, () => new Array(k).fill(0));
+  const Xty = new Array(k).fill(0);
+  const seen = new Array(k).fill(0);
+
+  for (const g of games) {
+    const row = [];
+    g.a.forEach((p) => { if (p in ix) row.push([ix[p], 1]); });
+    g.b.forEach((p) => { if (p in ix) row.push([ix[p], -1]); });
+    const y = g.sa - g.sb;
+    for (const [i, si] of row) {
+      seen[i]++;
+      Xty[i] += si * y;
+      for (const [j, sj] of row) XtX[i][j] += si * sj;
+    }
+  }
+  for (let i = 0; i < k; i++) XtX[i][i] += ALPHA;
+  return { beta: solveLin(XtX, Xty), games: seen, players };
+}
+
+/**
+ * Centre a fit on its rated players.
+ *
+ * The design matrix has the all-ones vector in its null space: adding a
+ * constant to every player raises both teams by the same amount and leaves
+ * every predicted margin untouched. Ridge picks a level only through its
+ * penalty, so the whole set can slide up or down as a window's composition
+ * changes -- which showed up as every selected player's "change" reading
+ * negative at once, an artefact rather than a fact about anyone's form.
+ *
+ * Subtracting the games-weighted mean of the rated players removes that
+ * component. Predictions are unaffected, because a doubles margin is a
+ * difference of two two-player sums.
+ */
+function centred(fit, minGames) {
+  let num = 0, den = 0;
+  fit.beta.forEach((b, i) => {
+    if (fit.games[i] >= minGames) { num += b * fit.games[i]; den += fit.games[i]; }
+  });
+  const mu = den ? num / den : 0;
+  return fit.beta.map((b) => b - mu);
+}
+
+/** Rating at every point in the log, on a trailing window. w = 0 means all. */
+const MIN_IN_WINDOW = 4;
+function ratingSeries(games, players, w) {
+  const out = [];
+  // Nothing is drawn until the window is actually full. The first games of a
+  // 40-game window are a fit on 8 games wearing a 40-game label, and they
+  // swung wildly enough to dominate the whole chart's vertical scale.
+  const need = w ? w : 40;
+  for (let t = need; t <= games.length; t++) {
+    const from = w ? Math.max(0, t - w) : 0;
+    const fit = ridge(games.slice(from, t), players);
+    out.push({
+      i: t - 1, t: games[t - 1].t, date: games[t - 1].date,
+      beta: centred(fit, MIN_IN_WINDOW), games: fit.games,
+    });
+  }
+  return out;
+}
+
+/* ---- margin <-> win probability, through the Almanac's rally mathematics --
+ * The ridge predicts a point margin. gameWinProb needs a per-rally
+ * probability, so this inverts the expected-score map: the p whose expected
+ * scoreline differs by the predicted margin.
+ *
+ * Done by bisection this cost ~1300 log-gamma evaluations per candidate
+ * matchup, and the picker scores every candidate on every render -- tens of
+ * milliseconds of arithmetic on a phone, per keystroke. expectedScore is
+ * monotone in p, so one sampled table inverts by binary search instead, built
+ * once per target. Sampling is denser near p = 0.5, where the margin curve is
+ * steepest and most of the real matchups sit.
+ */
+const _mTable = new Map();
+function marginTable(target) {
+  let t = _mTable.get(target);
+  if (t) return t;
+  const ps = [], ms = [];
+  for (let i = 0; i <= 256; i++) {
+    const p = 0.5 + 0.4995 * Math.pow(i / 256, 1.4);
+    const e = expectedScore(p, target);
+    ps.push(p); ms.push(e[0] - e[1]);
+  }
+  t = { ps, ms };
+  _mTable.set(target, t);
+  return t;
+}
+
+function pFromMargin(m, target) {
+  const { ps, ms } = marginTable(target);
+  const want = Math.abs(m);
+  const last = ms.length - 1;
+  let p;
+  if (want >= ms[last]) p = ps[last];
+  else {
+    let lo = 0, hi = last;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (ms[mid] < want) lo = mid; else hi = mid;
+    }
+    const span = ms[hi] - ms[lo];
+    p = span > 1e-12 ? ps[lo] + (want - ms[lo]) / span * (ps[hi] - ps[lo]) : ps[lo];
+  }
+  return m < 0 ? 1 - p : p;
+}
+
+/* ==================================================================== state */
+
+const PRIORITIES = [
+  { k: "partnerNight", label: "New partners", hint: "tonight" },
+  { k: "partnerAll",   label: "New partners", hint: "all time" },
+];
+
+/* Starting points, not settings -- the sliders are the real control. The
+ * middle one is the default because it lands nearest what the group already
+ * does: the Almanac measures their real nights at 0.320 mean imbalance with
+ * 14.3 distinct partnerships. */
+const PRESETS = {
+  balanced: { partnerNight: 1, partnerAll: 0, minQ: 75 },
+  social:   { partnerNight: 2, partnerAll: 1, minQ: 50 },
+  fresh:    { partnerNight: 2, partnerAll: 3, minQ: 0 },
+};
+
+const S = {
+  tab: "tonight",
+  here: [],
+  target: 11,        // this group plays to 11, always
+  courts: 1,
+  w: { ...PRESETS.social },
+  minQ: 50,            // the floor: no suggestion below this game quality
+  prefsOpen: false,
+  rosterOpen: null,    // null = open until the night starts, then collapsed
+  discarded: [],       // suggestion keys turned down for the current pick
+  plan: [],            // upcoming games: {id, round, court, a, b, sit, sa, sb}
+  games: [],           // played tonight: {a, b, sa, sb, sit}
+  window: 40,
+  shown: [],           // players selected in the chart
+  chartMode: null,     // null = follow the count; else "together" | "separate"
+  range: null,         // [fromFraction, toFraction] of the fitted series
+  custom: { p: ["", "", "", ""], sa: "", sb: "" },   // the unplanned game
+  extra: [],           // people typed in who are not in the log yet
+  noSmall: [],         // people who would rather sit than play a small game
+  sourceUrl: "",       // a CSV of your own; empty means the one baked in
+  sourceOpen: false,
+  srcKey: "",          // which log the people below belong to
+};
+
+/* Anything that is about *these* people, as opposed to how the reader likes
+ * the app to behave. Preferences survive a change of source; rosters, plans,
+ * results and per-person settings do not, because they belong to a particular
+ * log. */
+function forgetPeople() {
+  S.here = []; S.extra = []; S.games = []; S.plan = [];
+  S.shown = []; S.noSmall = []; S.discarded = [];
+  S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
+}
+
+const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
+                 "plan", "games", "window", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
+                 "srcKey"];
+
+function save() {
+  try {
+    const out = {};
+    PERSIST.forEach((k) => { out[k] = S[k]; });
+    localStorage.setItem(KEY, JSON.stringify(out));
+  } catch (e) { /* private mode: run without persistence */ }
+}
+/**
+ * Saved state belongs to the log it was entered against.
+ *
+ * Without that, a browser that had used a different source brought its people
+ * with it: open a copy carrying no data at all and the old roster, an added
+ * name and last week's results were all still there. Two groups on one phone,
+ * or one shared link swapped for another, would each see the other's names.
+ *
+ * Preferences carry over -- how many courts, the quality floor, the window.
+ * Everything that names somebody does not.
+ */
+function restore() {
+  try {
+    const v = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (!v || !Array.isArray(v.here)) return;
+    PERSIST.forEach((k) => { if (v[k] !== undefined) S[k] = v[k]; });
+
+    const willUse = linkSource() || S.sourceUrl || BOOT.url || "";
+    if (!willUse || (v.srcKey || "") !== willUse) {
+      forgetPeople();
+      S.srcKey = willUse;
+    }
+  } catch (e) { /* corrupt or unavailable */ }
+}
+
+/* ============================================================= matchmaking */
+
+const pairKey = (a, b) => (a < b ? a + "|" + b : b + "|" + a);
+const teamKey = (t) => pairKey(t[0], t[1]);
+const matchKey = (a, b) => [teamKey(a), teamKey(b)].sort().join(" v ");
+const gameKeyOf = (g) => matchKey(g.a, g.b);
+
+/** All k-subsets of arr, in order. */
+function combosK(arr, k) {
+  const out = [], cur = [];
+  (function walk(start) {
+    if (cur.length === k) { out.push(cur.slice()); return; }
+    for (let i = start; i <= arr.length - (k - cur.length); i++) {
+      cur.push(arr[i]); walk(i + 1); cur.pop();
+    }
+  })(0);
+  return out;
+}
+
+/** How many doubles games run at once: limited by courts, and by bodies. */
+function roundSize() {
+  return Math.max(1, Math.min(S.courts, Math.floor(S.here.length / 4)));
+}
+
+/**
+ * How many courts this many people can actually fill.
+ *
+ * Not floor(n/4). The last court can take a singles or a three-way, which is
+ * the entire point of having a spare one -- and capping the control at
+ * floor(n/4) disabled the very button that turns that on. Six people could not
+ * select two courts; eleven could not select three.
+ */
+function usableCourts(n) {
+  const doubles = Math.floor(n / 4);
+  return Math.max(1, doubles + (n - 4 * doubles >= 2 ? 1 : 0));
+}
+
+/** Courts actually in use: the doubles games, plus the spare if it is filled. */
+function courtsInUse() {
+  const k = roundSize();
+  const leftover = S.here.length - 4 * k;
+  return k + (k < S.courts && (leftover === 2 || leftover === 3) ? 1 : 0);
+}
+
+/** Pair and opponent counts over a set of games, plus the even-share divisor. */
+function tally(games, roster) {
+  const partner = {};
+  let n = 0;
+  for (const g of games) {
+    if (g.a.length !== 2 || g.b.length !== 2) continue;   // no partnerships to count
+    const four = g.a.concat(g.b);
+    if (!four.every((p) => roster.includes(p))) continue;
+    n++;
+    partner[teamKey(g.a)] = (partner[teamKey(g.a)] || 0) + 1;
+    partner[teamKey(g.b)] = (partner[teamKey(g.b)] || 0) + 1;
+  }
+  const nPairs = Math.max(1, roster.length * (roster.length - 1) / 2);
+  // Each game spends two partnerships; an even spread would give every pair
+  // this many. Dividing by it makes "twice your share" mean the same thing
+  // tonight as it does over ten months.
+  return { partner, pShare: Math.max(0.5, 2 * n / nPairs), n };
+}
+
+/* Repetition penalties.
+ *
+ * Convex in the repeat count, because a penalty linear in "times already
+ * partnered" is affine: it shifts every candidate by the same amount and
+ * cannot tell a second pairing from a fourth.
+ *
+ * Both are scaled so a *typical* amount of repetition scores about the same as
+ * a typical amount of imbalance -- roughly [0, 1], matching `comp`. Without
+ * that the slider numbers lie: novelty at 1 was outweighing closeness at 3 and
+ * pushing mean imbalance from 0.13 to 0.42. REF is the count treated as "a
+ * normal amount"; opponents get a bigger one because every game creates four
+ * opposing pairs and only two partnerships. */
+const REF_P = 2;
+const QUALITY_TIE = 0.8;
+
+/* The floor's notches.
+ *
+ * Below about 50 the number stops sorting anything useful -- a 30 and a 10 are
+ * both games nobody wants -- so the bottom of the bar is "any" and the scale
+ * proper starts at a coin-flip-ish 50 and runs to 100 in fives. That puts every
+ * notch somewhere a real matchup lands, instead of spending half the travel on
+ * blowouts. */
+const Q_STEPS = [0, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
+const qIndex = (v) => {
+  let best = 0;
+  Q_STEPS.forEach((q, i) => {
+    if (Math.abs(q - v) < Math.abs(Q_STEPS[best] - v)) best = i;
+  });
+  return best;
+};
+const penNight = (m, k, ref) => { const r = (m[k] || 0) / ref; return r * r; };
+const penAll = (m, k, share) => { const r = (m[k] || 0) / share / REF_P; return r * r; };
+
+/**
+ * Everything a suggestion is judged against.
+ *
+ * Planned games count as played here even though nobody has hit a ball yet:
+ * if they did not, the planner would keep proposing the same fresh pairing for
+ * every game in the queue and book one person onto three courts at once.
+ */
+/** The next round number: one past anything played or already queued. */
+function nextRound() {
+  let mx = 0;
+  S.plan.forEach((g) => { if (g.round > mx) mx = g.round; });
+  S.games.forEach((g) => { if ((g.round || 0) > mx) mx = g.round; });
+  return mx + 1;
+}
+
+/** Every played game belonging to the most recent round. */
+function lastPlayedRound() {
+  if (!S.games.length) return [];
+  const withRound = S.games.filter((g) => g.round !== undefined);
+  if (!withRound.length) return [S.games[S.games.length - 1]];
+  const last = Math.max(...withRound.map((g) => g.round));
+  return withRound.filter((g) => g.round === last);
+}
+
+let CTX = null;
+function context() {
+  const games = allGames();
+  const roster = S.here;
+  const fit = ridge(games, rosterOf(games));
+  const rate = Object.fromEntries(fit.players.map((p, i) => [p, fit.beta[i]]));
+
+  const tonight = S.games.concat(S.plan).map((g) => ({ a: g.a, b: g.b }));
+  const played = Object.fromEntries(roster.map((p) => [p, 0]));
+  tonight.forEach((g) => playersOf(g).forEach((p) => {
+    if (p in played) played[p]++;
+  }));
+
+  /* Who sat out the most recent round, planned or played.
+   *
+   * A round is every game sharing a round id, which matters once there is more
+   * than one court: taking the single last *game* counted the other court's
+   * four as having sat, and they then carried a phantom back-to-back penalty
+   * that kept them off the bench for good. Games saved before rounds existed
+   * carry no id, so those fall back to the last game alone. */
+  const lastRound = S.plan.length
+    ? S.plan.filter((g) => g.round === S.plan[S.plan.length - 1].round)
+    : lastPlayedRound();
+  const onLast = new Set(lastRound.flatMap(playersOf));
+
+  _gcCache.clear();          // costs are relative to this context only
+  /* How often each person has already had a small game, and who had one in
+   * the last round. A three-way is better than sitting, but it is not what
+   * anybody came for, so it should move around. */
+  const smallCount = Object.fromEntries(roster.map((p) => [p, 0]));
+  S.games.concat(S.plan).forEach((g) => {
+    if (isSmall(g)) playersOf(g).forEach((p) => {
+      if (p in smallCount) smallCount[p]++;
+    });
+  });
+  const smallLast = new Set(lastRound.filter(isSmall).flatMap(playersOf));
+
+  CTX = {
+    rate, smallCount, smallLast,
+    night: tally(tonight, roster),
+    all: tally(games.map((g) => ({ a: g.a, b: g.b })).concat(
+      S.plan.map((g) => ({ a: g.a, b: g.b }))), roster),
+    played,
+    lastSit: new Set(roster.filter((p) => lastRound.length && !onLast.has(p))),
+  };
+  return CTX;
+}
+
+/**
+ * How good a game this should be, 0-100, where 100 is a coin flip.
+ *
+ * Linear in the distance from even, so the number moves the way the feeling
+ * does: 60/40 reads 80, 75/25 reads 50, 90/10 reads 20. It replaces the
+ * win-probability split on the suggestion cards -- being told who is going to
+ * win is the one thing nobody wanted to know before playing.
+ */
+const qualityOf = (g) =>
+  Math.round(100 * (1 - 2 * Math.abs(winProbOf(g.a, g.b) - 0.5)));
+
+const rateOf = (p) => (CTX && CTX.rate[p] !== undefined ? CTX.rate[p] : 0);
+const marginOf = (a, b) =>
+  a.reduce((t, p) => t + rateOf(p), 0) - b.reduce((t, p) => t + rateOf(p), 0);
+
+/* Win probability is asked for the same team pair thousands of times while a
+ * round is being enumerated, so it is memoised per pair and target. */
+const _wpCache = new Map();
+function winProbOf(a, b) {
+  const k = teamKey(a) + "#" + teamKey(b) + "#" + S.target;
+  let v = _wpCache.get(k);
+  if (v === undefined) {
+    v = gameWinProb(pFromMargin(marginOf(a, b), S.target), S.target);
+    if (_wpCache.size > 20000) _wpCache.clear();
+    _wpCache.set(k, v);
+  }
+  return v;
+}
+const clearWpCache = () => _wpCache.clear();
+
+/* Enumerating a round asks for the same handful of team pairs over and over --
+ * eleven players on two courts generates ~52,000 candidates out of only ~990
+ * distinct games -- so the per-game cost is memoised for the life of one
+ * context. Without this a suggestion took half a second here, which is seconds
+ * on a phone. */
+const _gcCache = new Map();
+function gameCost(a, b, C) {
+  const k = matchKey(a, b);
+  let v = _gcCache.get(k);
+  if (v === undefined) { v = gameCostRaw(a, b, C); _gcCache.set(k, v); }
+  return v;
+}
+
+/** Quality and novelty for one game. No sit-out terms: who is benched depends
+ *  on the whole round, not on this game alone. */
+function gameCostRaw(a, b, C) {
+  const p = winProbOf(a, b);
+  const comp = (p - 0.5) * (p - 0.5) * 4;              // 0 even .. 1 blowout
+
+  const pn = (penNight(C.night.partner, teamKey(a), REF_P)
+            + penNight(C.night.partner, teamKey(b), REF_P)) / 2;
+  const pa = (penAll(C.all.partner, teamKey(a), C.all.pShare)
+            + penAll(C.all.partner, teamKey(b), C.all.pShare)) / 2;
+
+  /* Closeness is a floor now, not a weight -- suggestions below the chosen
+   * game quality are not offered at all. What is left here is a light
+   * tiebreak, so that between two equally fresh matchups the closer one still
+   * comes first; without it the planner would happily rank a game that just
+   * scrapes the floor above one far better. */
+  const W = S.w;
+  return QUALITY_TIE * comp + W.partnerNight * pn + W.partnerAll * pa;
+}
+
+/* A leftover group of two or three, with a court free, plays rather than
+ * sits. Two is singles; three is a three-way, where everyone keeps their own
+ * score. Neither is what people came for, so the cost function moves them
+ * around: it charges for having had one recently, for having had several, and
+ * it will not build one at all out of anybody who has opted out. */
+const willSmall = (p) => !S.noSmall.includes(p);
+const SMALL_REPEAT_W = 1.3, SMALL_BTB_W = 3.2, IDLE_COURT_W = 1.6;
+
+function smallGameFor(leftover) {
+  if (leftover.length === 2) {
+    return { kind: "singles", a: [leftover[0]], b: [leftover[1]], sa: 0, sb: 0 };
+  }
+  if (leftover.length === 3) {
+    return {
+      kind: "cutthroat",
+      a: [leftover[0]], b: [leftover[1]], c: [leftover[2]],
+      sa: 0, sb: 0, sc: 0,
+    };
+  }
+  return null;
+}
+
+/**
+ * Whose turn the small game is.
+ *
+ * As a weighted penalty this lost: the planner parked whoever was hardest to
+ * balance a doubles four around -- the weakest player, usually the same one --
+ * into the three-way over and over, because removing them made the doubles
+ * game even. Measured over six rounds with seven present, three players got
+ * four each and two got one. So the rotation is structural, exactly as court
+ * time is: nobody takes a second small game while anyone willing is still on
+ * their first.
+ */
+function smallRotation(C) {
+  const willing = S.here.filter(willSmall);
+  if (!willing.length) return { due: new Set(), min: 0 };
+  const min = Math.min(...willing.map((p) => C.smallCount[p] || 0));
+  return { due: new Set(willing.filter((p) => (C.smallCount[p] || 0) === min)), min };
+}
+
+/** True when this leftover group is the one whose turn it is. */
+function smallTurnOk(leftover, rot, C) {
+  const above = leftover.filter((p) => (C.smallCount[p] || 0) > rot.min).length;
+  // going above the minimum is allowed only when too few are due to fill it
+  return above <= Math.max(0, leftover.length - rot.due.size);
+}
+
+/** What a leftover group costs, and whether it can play at all. */
+function smallCost(leftover, C) {
+  let cost = 0;
+  for (const p of leftover) {
+    const n = C.smallCount[p] || 0;
+    cost += SMALL_REPEAT_W * n * n;
+    if (C.smallLast.has(p)) cost += SMALL_BTB_W;
+  }
+  return cost;
+}
+
+/* Benching the same person two rounds running. Court time itself is handled by
+ * candidateLineups, so this is the only fixed term left -- and it is dropped
+ * inside a forced pair, where honouring it would freeze the same fours
+ * together all night. */
+const BTB_W = 2.4;
+
+/** The three ways to split four players into two pairs. */
+const splitsOf = (four) => [1, 2, 3].map((i) => {
+  const a = [four[0], four[i]];
+  return { a, b: four.filter((x) => !a.includes(x)) };
+});
+
+/** Order a game so the stronger side reads on top, as every card does. */
+const orient = (g) => (isSmall(g) ? g
+  : marginOf(g.a, g.b) < 0 ? { a: g.b, b: g.a } : { a: g.a, b: g.b });
+
+/**
+ * Who is allowed on court next.
+ *
+ * Even court time is a structural constraint, not a weighted term: whoever is
+ * on the fewest games tonight must be in the next round. A soft penalty cannot
+ * promise this -- the all-time novelty terms are unbounded, so at high settings
+ * they simply outbid any fixed fairness weight, which measured out as a
+ * three-game spread over an eleven-game night. As a filter the spread stays at
+ * one, and there is still real choice: when several players are equally due,
+ * every combination of them is on the table.
+ */
+function candidateLineups(need, C) {
+  const here = S.here;
+  if (need >= here.length) return [here.slice()];
+  const mn = Math.min(...here.map((p) => C.played[p]));
+  const must = here.filter((p) => C.played[p] === mn);
+  if (must.length >= need) return combosK(must, need);
+
+  const fill = need - must.length;
+  const rest = here.filter((p) => C.played[p] > mn)
+                   .sort((x, y) => C.played[x] - C.played[y]);
+  const thr = C.played[rest[fill - 1]];             // next tier up, ties kept
+  const pool = rest.filter((p) => C.played[p] <= thr);
+  return combosK(pool, fill).map((c) => must.concat(c));
+}
+
+/**
+ * How many ways k foursomes can be dealt, without building them.
+ *
+ * The enumeration is exact and unbounded, which is fine at this group's size
+ * and is not fine one roster later: eleven on two courts is 72 ms, but
+ * thirteen on three is seven seconds of frozen main thread. So the lineups --
+ * which differ only in who sits -- are thinned to hold the candidate count
+ * near a ceiling, deterministically and evenly, rather than the whole thing
+ * being allowed to grow without limit.
+ */
+function partitionCount(k) {
+  let n = 1;
+  for (let i = k; i > 1; i--) {
+    const m = 4 * i - 1;
+    n *= (m * (m - 1) * (m - 2)) / 6;          // C(4i-1, 3)
+  }
+  return n;
+}
+
+/* The ceiling is on *work*, not on candidate count: each shape costs k * 3^k
+ * game evaluations, so 3 for one court and 81 for three. Capping shapes alone
+ * left fifteen players on three courts at 589 ms. */
+const MAX_EVALS = 60000;
+const PARTS_PER_LINEUP = 200;
+
+/** Every way to deal `players` into k foursomes. Canonical: the lowest
+ *  remaining player anchors each group, so no partition is generated twice. */
+function partitionInto4s(players, k) {
+  if (k === 1) return [[players]];
+  const [first, ...rest] = players;
+  const out = [];
+  for (const trio of combosK(rest, 3)) {
+    const group = [first].concat(trio);
+    const remain = players.filter((p) => !group.includes(p));
+    for (const sub of partitionInto4s(remain, k - 1)) out.push([group].concat(sub));
+  }
+  return out;
+}
+
+/** Cartesian product of the split choices for each foursome in a partition. */
+function splitCombos(partition) {
+  let acc = [[]];
+  for (const four of partition) {
+    const next = [];
+    for (const head of acc) for (const s of splitsOf(four)) next.push(head.concat([s]));
+    acc = next;
+  }
+  return acc;
+}
+
+/**
+ * A suggestion is one round of `k` simultaneous games -- as many as the courts
+ * and the bodies allow, so with nine here and two courts, eight play and one
+ * sits rather than four playing and five watching.
+ *
+ * With exactly 8k present it is two rounds, chosen together. There the four
+ * left sitting *are* the next game: the pairing is forced, not chosen, so
+ * picking one round at a time hands the group whatever remainder is left over.
+ * Because the foursomes are disjoint no pair can appear in both rounds, which
+ * makes the joint cost an exact sum rather than an approximation.
+ */
+function suggestions(limit = 3) {
+  const C = context();
+  const k = roundSize();
+  const need = 4 * k;
+  if (S.here.length < 4) return [];
+
+  const paired = S.here.length === 2 * need;   // one round leaves exactly one more
+
+  /* Both halves of a pair get played, one straight after the other, so which
+   * is called "first" carries no information -- and enumerating lineup L and
+   * its complement produced each plan twice, mirrored, filling four option
+   * slots with two plans. Sorting the round keys collapses the mirror. */
+  const roundKey = (r) => r.map(
+    (g) => (isSmall(g) ? g.kind + ":" + playersOf(g).slice().sort().join("|")
+                       : matchKey(g.a, g.b))).sort().join(" | ");
+  const planKey = (rounds) => {
+    const ks = rounds.map(roundKey);
+    return (rounds.length > 1 ? ks.slice().sort() : ks).join(" >> ");
+  };
+  const shapeOf = (rounds) => {
+    const ks = rounds.map((r) => r.map(
+      (g) => playersOf(g).slice().sort().join("|")).sort().join(" | "));
+    return (rounds.length > 1 ? ks.slice().sort() : ks).join(" >> ");
+  };
+
+  /* Normally only the best split of each *shape* can be shown, because the
+   * options are meant to differ in who plays whom rather than in how the same
+   * four were split -- and collapsing as we go keeps 5,775 candidates instead
+   * of 52,000. But when there are fewer shapes than slots that rule deletes
+   * the only choice there is: with exactly four present the split IS the
+   * decision, and keying by shape left one option and an empty list after a
+   * single "Not this". So below the limit, key by the split instead. */
+  let lineups = candidateLineups(need, C);
+  const partCount = partitionCount(k) * (paired ? partitionCount(k) : 1);
+  const maxShapes = Math.max(240, Math.floor(MAX_EVALS / (k * Math.pow(3, k))));
+
+  /* Thin partitions first and lineups second, because the lineups are the
+   * choice of who sits -- the one people notice -- while the partitions are
+   * interchangeable ways to deal the same players. Both strides are fixed, so
+   * the same roster always gets the same options. */
+  const partStride = Math.max(1, Math.ceil(partCount / PARTS_PER_LINEUP));
+  const effParts = Math.min(partCount, PARTS_PER_LINEUP);
+  const maxLineups = Math.max(1, Math.floor(maxShapes / effParts));
+  if (lineups.length > maxLineups) {
+    const stride = Math.ceil(lineups.length / maxLineups);
+    lineups = lineups.filter((_, i) => i % stride === 0);
+  }
+  const best = new Map();
+  const keyer = lineups.length * partCount < limit ? planKey : shapeOf;
+
+  /* `btb` is carried alongside the cost, not just folded into it. A weight
+   * cannot keep a promise: with a quality floor on, every candidate that
+   * clears it may bench the same person, and then no penalty is large enough.
+   * It is a filter in the passes below instead. */
+  const keep = (rounds, sits, cost, btb) => {
+    const kk = keyer(rounds);
+    const prev = best.get(kk);
+    if (!prev || cost < prev.cost) best.set(kk, { rounds, sits, cost, btb });
+  };
+
+  /** Cheapest way to split a partition, and its cost. */
+  const bestSplit = (part) => {
+    let bc = Infinity, bg = null;
+    for (const combo of splitCombos(part)) {
+      let c = 0;
+      for (const g of combo) c += gameCost(g.a, g.b, C);
+      if (c < bc) { bc = c; bg = combo; }
+    }
+    return [bg, bc];
+  };
+
+  const courtFree = k < S.courts;
+  const rot = smallRotation(C);
+
+  for (const lineup of lineups) {
+    const leftover = S.here.filter((p) => !lineup.includes(p));
+
+    /* With a court going spare, two or three left over play rather than watch.
+     * Unless one of them would rather not: then they sit, and the idle court
+     * is charged for, so the planner prefers arrangements where the people
+     * left over are the ones happy to take it. */
+    const canSmall = courtFree && (leftover.length === 2 || leftover.length === 3)
+                     && leftover.every(willSmall) && smallTurnOk(leftover, rot, C);
+    const small = canSmall ? smallGameFor(leftover) : null;
+    const sit = small ? [] : leftover;
+    const btb = sit.filter((p) => C.lastSit.has(p)).length;
+    const extra = small ? smallCost(leftover, C)
+      : (courtFree && leftover.length >= 2 ? IDLE_COURT_W : 0);
+    const withSmall = (combo) => (small ? combo.concat([small]) : combo);
+    const base = BTB_W * btb + extra;
+
+    let pi = 0;
+    for (const part of partitionInto4s(lineup, k)) {
+      if (partStride > 1 && (pi++ % partStride)) continue;
+      if (!paired) {
+        if (keyer === planKey) {
+          // few enough shapes that the split is the real choice: keep them all
+          for (const combo of splitCombos(part)) {
+            let c = 0;
+            for (const g of combo) c += gameCost(g.a, g.b, C);
+            keep([withSmall(combo)], [sit], base + c, btb);
+          }
+        } else {
+          const [combo, cost] = bestSplit(part);
+          keep([withSmall(combo)], [sit], base + cost, btb);
+        }
+        continue;
+      }
+      /* The complement is forced, so nobody sits: the leftover here is round
+       * two's lineup, not a bench, and charging the back-to-back penalty
+       * against it is what made the planner replay the previous round verbatim
+       * -- the only zero-penalty choice was the four who had just played. Its
+       * cost is independent of how round one is split, the two foursomes
+       * sharing no pair, so the halves are optimised separately. */
+      const [combo, cost] = bestSplit(part);
+      for (const part2 of partitionInto4s(leftover, k)) {
+        const [combo2, cost2] = bestSplit(part2);
+        keep([combo, combo2], [leftover, lineup], cost + cost2, 0);
+      }
+    }
+  }
+
+  /* Three options, and they have to be worth having three of.
+   *
+   * Distinct shapes alone was too weak a test: with eight here it happily
+   * offered four plans that differed by swapping one player, which is not a
+   * choice, it is the same suggestion four times. Each option now has to share
+   * at most half its partnerships with every option already picked. */
+  const pairsOf = (rounds) => new Set(rounds.flatMap(
+    (r) => r.flatMap((g) => (isSmall(g) ? [] : [teamKey(g.a), teamKey(g.b)]))));
+  const different = (cand, taken) => {
+    const mine = pairsOf(cand);
+    const cap = Math.floor(mine.size / 2);
+    return taken.every((t) => {
+      let shared = 0;
+      t.forEach((k) => { if (mine.has(k)) shared++; });
+      return shared <= cap;
+    });
+  };
+
+  /** The worst doubles game in a plan -- what the floor is measured against. */
+  const worstQuality = (rounds) => {
+    let worst = 100;
+    for (const r of rounds) for (const g of r) {
+      if (!isSmall(g)) worst = Math.min(worst, qualityOf(g));
+    }
+    return worst;
+  };
+
+  /* Three passes, each dropping one requirement.
+   *
+   * The floor is a constraint, so it comes off last: better to show three
+   * near-identical arrangements that are all good games than three varied ones
+   * that are all blowouts. But it does come off -- a floor of 90 with this
+   * group's spread can be unreachable, and an empty screen at the net is worse
+   * than a marked one. Whether it was met is reported alongside. */
+  const picked = [], takenPairs = [];
+  const ranked = Array.from(best.values()).sort((x, y) => x.cost - y.cost);
+  /* Nobody sitting twice running outranks the quality floor: a promise the
+   * app makes out loud beats a preference the reader set. Both come off before
+   * an empty screen does. */
+  const passes = [
+    { floor: true, rested: true, varied: true },
+    { floor: true, rested: true, varied: false },
+    { floor: false, rested: true, varied: false },
+    { floor: true, rested: false, varied: false },
+    { floor: false, rested: false, varied: false },
+  ];
+  let metFloor = true;
+  for (const pass of passes) {
+    for (const o of ranked) {
+      if (picked.length >= limit) break;
+      const key = planKey(o.rounds);
+      if (S.discarded.includes(key)) continue;
+      if (picked.some((q) => q.key === key)) continue;
+      const wq = worstQuality(o.rounds);
+      if (pass.floor && wq < S.minQ) continue;
+      if (pass.rested && o.btb) continue;
+      if (pass.varied && !different(o.rounds, takenPairs)) continue;
+      if (!pass.floor && wq < S.minQ) metFloor = false;
+      takenPairs.push(pairsOf(o.rounds));
+      picked.push({
+        key, cost: o.cost, paired, worst: wq,
+        rounds: o.rounds.map((r, i) => ({ games: r.map(orient), sit: o.sits[i] })),
+      });
+    }
+    if (picked.length >= limit) break;
+  }
+  picked.metFloor = metFloor;
+  return picked;
+}
+
+/* ================================================================ helpers */
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Real spaces around the ampersand, so a long pair has somewhere to break:
+// without them "Bartholomew&Wilhelmina" is one unbreakable word and prints
+// straight through the score.
+const teamHTML = (t) => `${esc(t[0])} <span class="amp">&amp;</span> ${esc(t[1])}`;
+const pct = (x) => Math.round(x * 100);
+const signed = (x, d = 1) => {
+  const v = Math.abs(x).toFixed(d);            // "-0.0" is not a reading
+  return (Number(v) === 0 ? "" : x >= 0 ? "+" : "−") + v;
+};
+
+/**
+ * Ask before something irreversible.
+ *
+ * Not window.confirm: a published Artifact runs in a sandboxed iframe without
+ * `allow-modals`, where confirm() is ignored and returns false -- so every
+ * guarded action silently did nothing. Deleting a played game looked broken
+ * for exactly that reason, and Remove, the roster guard and End night were
+ * dead in the same way.
+ */
+function ask(message, confirmLabel) {
+  return new Promise((resolve) => {
+    const host = $("#dialog");
+    host.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "dialogbox";
+    box.setAttribute("role", "alertdialog");
+    box.setAttribute("aria-modal", "true");
+    const p = document.createElement("p");
+    p.className = "dialogmsg";
+    p.textContent = message;
+    const row = document.createElement("div");
+    row.className = "dialogacts";
+    const no = document.createElement("button");
+    no.className = "btn small ghost"; no.type = "button"; no.textContent = "Cancel";
+    const yes = document.createElement("button");
+    yes.className = "btn small danger"; yes.type = "button";
+    yes.textContent = confirmLabel || "Delete";
+    const close = (v) => { host.classList.remove("on"); host.innerHTML = ""; resolve(v); };
+    no.onclick = () => close(false);
+    yes.onclick = () => close(true);
+    host.onclick = (e) => { if (e.target === host) close(false); };
+    row.append(no, yes);
+    box.append(p, row);
+    host.appendChild(box);
+    host.classList.add("on");
+    yes.focus();
+  });
+}
+
+let toastT = null;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("on"), 2200);
+}
+
+/* ================================================================== render */
+
+function render() {
+  // the ratings tab runs wider than the phone column, and the header has to
+  // follow it or the wordmark floats in the middle of the page
+  document.body.classList.toggle("wide", S.tab === "ratings");
+  $("#tabTonight").classList.toggle("hidden", S.tab !== "tonight");
+  $("#tabRatings").classList.toggle("hidden", S.tab !== "ratings");
+  $$("#tabs button").forEach((b) =>
+    b.setAttribute("aria-pressed", b.dataset.tab === S.tab ? "true" : "false"));
+
+  if (S.tab === "tonight") renderTonight(); else renderRatings();
+  renderMeta();
+}
+
+function renderMeta() {
+  const n = S.games.length, q = S.plan.length;
+  $("#topMeta").innerHTML = S.tab === "ratings"
+    ? `${LOG.length} games · ${SOURCE}<br>through ${lastDate()}`
+    : `${n} played · ${q} planned<br>${S.here.length} here · ${LOG.length} in the log`;
+}
+
+function renderTonight() {
+  clearWpCache();
+  // Every odds readout on this tab reads CTX, and suggestions() used to be the
+  // only thing that built it -- so on the first paint the planned games all
+  // showed 50%, every rating having defaulted to zero.
+  context();
+  renderRoster();
+  renderPrefs();
+  renderPlan();
+  renderSuggestions();
+  renderPlayed();
+  renderCustom();
+  renderSource();
+  renderFoot();
+}
+
+/** Open until there is something on court, then collapsed -- unless the reader
+ *  has said otherwise, in which case that sticks. */
+function rosterOpen() {
+  if (S.rosterOpen !== null) return S.rosterOpen;
+  return !(S.plan.length || S.games.length);
+}
+
+/* Who appears as a chip.
+ *
+ * Everyone the log has seen enough of to be worth a standing button, plus
+ * anyone typed in tonight. The threshold drops the two names that turn up
+ * three and seven times in ten months -- a permanent button for someone who
+ * comes once a year is eleven targets where nine would do, and the text box
+ * puts them back in one line when they do appear. */
+/* Scaled to the log rather than fixed, so the app works on someone else's
+ * sheet. At this group's 364 games these land on 8 and 20, exactly where they
+ * were set by hand; on a 60-game log they fall to 1 and 4 instead of hiding
+ * everybody. */
+const rosterMinGames = () => Math.min(8, Math.max(1, Math.floor(LOG.length / 45)));
+
+function knownPlayers() {
+  const total = {};
+  LOG.forEach((g) => playersOf(g).forEach((p) => { total[p] = (total[p] || 0) + 1; }));
+  const out = Object.keys(total).filter((p) => total[p] >= rosterMinGames());
+  S.extra.concat(S.here).forEach((p) => { if (!out.includes(p)) out.push(p); });
+  S.games.concat(S.plan).forEach((g) => playersOf(g).forEach((p) => {
+    if (!out.includes(p)) out.push(p);
+  }));
+  return { list: out, total };
+}
+
+function renderRoster() {
+  const open = rosterOpen();
+  $("#rosterBody").classList.toggle("hidden", !open);
+  $("#rosterToggle").setAttribute("aria-expanded", open ? "true" : "false");
+  const names = S.here.slice(0, 3).join(", ");
+  $("#rosterSum").textContent = S.here.length
+    ? `${S.here.length} here — ${names}${S.here.length > 3 ? `, +${S.here.length - 3}` : ""}`
+    : "nobody selected yet";
+
+  const host = $("#roster");
+  const { list: all, total } = knownPlayers();
+  const count = Object.fromEntries(all.map((p) => [p, total[p] || 0]));
+  all.sort((x, y) => count[y] - count[x] || x.localeCompare(y));
+
+  host.innerHTML = "";
+  for (const p of all) {
+    const on = S.here.includes(p);
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button";
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.innerHTML = `${esc(p)}<span class="r">${count[p]}</span>`;
+    b.onclick = async () => {
+      const i = S.here.indexOf(p);
+      const next = i >= 0 ? S.here.filter((q) => q !== p) : S.here.concat([p]);
+      // Ask before a roster tap throws away a game with points on it. The
+      // Remove button already guards this; the chip grid sits at the top of
+      // the page with eleven 42px targets and did not.
+      const doomed = S.plan.filter((g) => !playersOf(g).every((q) => next.includes(q)));
+      const scored = doomed.filter((g) => g.sa || g.sb);
+      if (scored.length) {
+        const g = scored[0];
+        if (!await ask(`${p} is in a game with a score on it — `
+          + `${g.a.join(" & ")} ${g.sa}\u2013${g.sb} ${g.b.join(" & ")}. `
+          + `Take ${p} out and lose it?`, "Remove " + p)) return;
+      }
+      S.here = next;
+      S.discarded = [];
+      dropUnplayablePlan();
+      save(); render();
+    };
+    host.appendChild(b);
+  }
+
+  const n = S.here.length, k = roundSize(), used = courtsInUse();
+  const leftover = n - 4 * k;
+  // two or three left over take a spare court rather than sitting, so long as
+  // they are willing -- the note has to say which is happening
+  const canSpare = k < S.courts && (leftover === 2 || leftover === 3);
+  const playing = 4 * k + (canSpare ? leftover : 0);
+  const sitting = n - playing;
+  $("#hereNote").innerHTML = n < 4
+    ? `Tap at least four. ${n} selected.`
+    : `<b>${playing}</b> on court at once across ` +
+      `<b>${used}</b> court${used === 1 ? "" : "s"}` +
+      (canSpare ? `, the spare ${leftover === 2 ? "two on singles" : "three in a three-way"}` : "") +
+      (sitting ? `, <b>${sitting}</b> sitting` : `, nobody sitting`) +
+      `. The number beside a name is games in the log.`;
+}
+
+/** A planned game naming someone who has left cannot be played. */
+function dropUnplayablePlan() {
+  const before = S.plan.length;
+  S.plan = S.plan.filter((g) => playersOf(g).every((p) => S.here.includes(p)));
+  if (S.plan.length !== before) toast("Dropped planned games — the roster changed");
+}
+
+function renderPrefs() {
+  $("#prefs").classList.toggle("hidden", !S.prefsOpen);
+  $("#prefsToggle").setAttribute("aria-expanded", S.prefsOpen ? "true" : "false");
+  // Show the count actually in use, and grey out the ones the roster cannot
+  // fill -- picking 3 with eleven here used to read as three courts running.
+  const cap = usableCourts(S.here.length);
+  const inUse = courtsInUse();
+  $$("#courtSeg button").forEach((b) => {
+    const c = Number(b.dataset.c);
+    b.disabled = c > cap;
+    // c courts needs four on all but the last, and at least two on that one
+    b.title = c > cap ? `Needs ${4 * c - 2} here` : "";
+    b.setAttribute("aria-pressed", c === Math.min(S.courts, inUse) ? "true" : "false");
+  });
+
+  S.minQ = Q_STEPS[qIndex(S.minQ)];          // snap anything stored off-notch
+  $("#minQ").value = qIndex(S.minQ);
+  $("#minQVal").textContent = S.minQ ? S.minQ : "any";
+
+  const top = PRIORITIES
+    .filter((p) => S.w[p.k] >= 2)
+    .map((p) => p.label.toLowerCase() + (p.hint === "all time" ? " (all time)" : ""));
+  $("#prefsSum").textContent =
+    (S.minQ ? `quality ${S.minQ}+` : "any quality")
+    + (top.length ? " · " + top.join(" · ") : "");
+
+  const smallHost = $("#smallPrefs");
+  smallHost.innerHTML = "";
+  for (const p of S.here.slice().sort()) {
+    const on = willSmall(p);
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button";
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.setAttribute("aria-label", `${p}: ${on ? "will play" : "would rather sit"}`);
+    b.innerHTML = `${esc(p)}<span class="r">${on ? "yes" : "no"}</span>`;
+    b.onclick = () => {
+      const i = S.noSmall.indexOf(p);
+      if (i >= 0) S.noSmall.splice(i, 1); else S.noSmall.push(p);
+      S.discarded = []; save(); render();
+    };
+    smallHost.appendChild(b);
+  }
+
+  const host = $("#priList");
+  host.innerHTML = "";
+  for (const p of PRIORITIES) {
+    const row = document.createElement("div");
+    row.className = "prirow";
+    row.innerHTML = `<div class="prilab">${esc(p.label)}<span>${esc(p.hint)}</span></div>`;
+    const seg = document.createElement("div");
+    seg.className = "seg tiny";
+    ["off", "1", "2", "3"].forEach((lab, v) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = lab;
+      b.setAttribute("aria-pressed", S.w[p.k] === v ? "true" : "false");
+      b.setAttribute("aria-label", `${p.label} ${p.hint}: ${lab}`);
+      b.onclick = () => { S.w[p.k] = v; S.discarded = []; save(); render(); };
+      seg.appendChild(b);
+    });
+    row.appendChild(seg);
+    host.appendChild(row);
+  }
+}
+
+/* ------------------------------------------------------------ 1 · planned */
+
+function renderPlan() {
+  const host = $("#plan");
+  const k = roundSize();
+  $("#planSec").classList.toggle("hidden", !S.plan.length);
+  host.innerHTML = "";
+  if (!S.plan.length) return;
+
+  const rounds = [];
+  for (const g of S.plan) {
+    if (!rounds.length || rounds[rounds.length - 1].id !== g.round)
+      rounds.push({ id: g.round, games: [] });
+    rounds[rounds.length - 1].games.push(g);
+  }
+  $("#planHead").textContent = S.plan.length === 1
+    ? "Planned · 1 game" : `Planned · ${S.plan.length} games`;
+
+  rounds.forEach((r, ri) => {
+    const wrap = document.createElement("div");
+    wrap.className = "round" + (ri === 0 ? " now" : "");
+    const sit = S.here.filter((p) => !r.games.some(
+      (g) => playersOf(g).includes(p)));
+    wrap.innerHTML = `<div class="roundhead">
+        <span>${ri === 0 ? `On court now · to ${S.target}` : `Up next · round ${ri + 1}`}</span>
+        ${sit.length ? `<span class="roundsit">sitting ${esc(sit.join(", "))}</span>` : ""}
+      </div>`;
+
+    /* Every pending game can be scored, not only the round on court: games
+     * get played out of order, and a slate that refuses the score of the game
+     * that actually finished is no use. Later rounds sit flatter and drop the
+     * column caption, so the one on court still reads first. */
+    r.games.forEach((g) => {
+      const sides = sidesOf(g), scores = scoresOf(g);
+      const small = isSmall(g);
+      const done = small ? smallDone(g)
+        : Math.max(g.sa, g.sb) >= S.target && Math.abs(g.sa - g.sb) >= 2;
+      const q = small ? null : qualityOf(g);
+      const band = q === null ? "" : q >= 80 ? "hi" : q >= 55 ? "mid" : "lo";
+      const card = document.createElement("article");
+      card.className = "slate" + (ri === 0 ? "" : " later") + (small ? " small" : "");
+      const KEYS = ["sa", "sb", "sc"];
+      card.innerHTML =
+        `<div class="slatehead">
+           <span>${small ? SMALL_LABEL[g.kind]
+                          : k > 1 ? `Court ${g.court}` : (ri === 0 ? "On court" : "Queued")}</span>
+           ${ri === 0 ? `<span class="slatecap">final score</span>` : ""}
+         </div>` +
+        sides.map((team, n) => `
+          <div class="slateside ${["a", "b", "c"][n]}">
+            <span class="sname">${esc(team.join(" & "))}</span>
+            <input class="sscore" type="text" inputmode="numeric" maxlength="2"
+                   value="${scores[n]}" data-g="${g.id}" data-s="${KEYS[n]}"
+                   aria-label="Final score for ${esc(team.join(" and "))}">
+          </div>`).join("") +
+        (small
+          ? `<div class="slateq"><span class="qlab">${
+              g.kind === "singles" ? "One on one" : "Everyone for themselves"
+            } &mdash; not in the ratings or the CSV</span></div>`
+          : `<div class="slateq"><span class="qlab">Game quality</span>
+               <span class="qmeter"><i class="${band}" style="width:${Math.max(2, q)}%"></i></span>
+               <span class="qnum ${band}">${q}</span></div>`);
+
+      const acts = document.createElement("div");
+      acts.className = "slateacts";
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "btn small primary"; saveBtn.type = "button";
+      saveBtn.textContent = done ? "Save \u2014 " + winnerOf(g).join(" & ") : "Save";
+      saveBtn.disabled = !done || Date.now() < saveGuardUntil;
+      saveBtn.onclick = () => finishGame(g.id);
+      const drop = document.createElement("button");
+      drop.className = "btn small ghost"; drop.type = "button";
+      drop.textContent = "Remove";
+      drop.setAttribute("aria-label", "Remove this planned game");
+      drop.onclick = async () => {
+        if (scores.some((v) => v) && !await ask(
+          `Remove ${sides.map((t) => t.join(" & ")).join(" v ")} and lose the score?`,
+          "Remove")) return;
+        S.plan = S.plan.filter((x) => x.id !== g.id);
+        save(); render();
+      };
+      acts.append(saveBtn, drop);
+      card.appendChild(acts);
+      wrap.appendChild(card);
+    });
+    host.appendChild(wrap);
+  });
+}
+
+/** A small game is done when someone has reached the target outright: singles
+ *  keeps win-by-2, a three-way just needs a clear leader. */
+function smallDone(g) {
+  const sc = scoresOf(g);
+  const hi = Math.max(...sc);
+  if (hi < S.target) return false;
+  const sorted = sc.slice().sort((x, y) => y - x);
+  return g.kind === "singles" ? hi - sorted[1] >= 2 : sorted[0] > sorted[1];
+}
+
+/** Whoever is top of the scores. */
+function winnerOf(g) {
+  const sides = sidesOf(g), sc = scoresOf(g);
+  let best = 0;
+  sc.forEach((v, i) => { if (v > sc[best]) best = i; });
+  return sides[best];
+}
+
+/* Saving a game shortens the page, so the next card's Save slides up under the
+ * finger that just tapped. A short freeze after a save absorbs the second tap
+ * that a sweaty finger and a 0.12s transition invite. */
+let saveGuardUntil = 0;
+
+function finishGame(id) {
+  const g = S.plan.find((x) => x.id === id);
+  if (!g || Date.now() < saveGuardUntil) return;
+  saveGuardUntil = Date.now() + 600;
+  setTimeout(() => { if (S.tab === "tonight") renderPlan(); }, 620);
+  const rec = { a: g.a.slice(), b: g.b.slice(), sa: g.sa, sb: g.sb, round: g.round };
+  if (isSmall(g)) {
+    rec.kind = g.kind;
+    if (g.c) { rec.c = g.c.slice(); rec.sc = g.sc; }
+  }
+  S.games.push(rec);
+  S.plan = S.plan.filter((x) => x.id !== id);
+  S.discarded = [];
+  save(); render();
+  const sc = scoresOf(g).slice().sort((x, y) => y - x);
+  toast(`${winnerOf(g).join(" & ")} win ${sc[0]}–${sc[1]}`);
+}
+
+/* -------------------------------------------------------- 2 · suggestions */
+
+/** The badges under a proposed game: why this one, in the group's own terms. */
+function gameTags(g, C) {
+  const q = qualityOf(g);
+  const tags = [];
+  if (!C.night.partner[teamKey(g.a)] && !C.night.partner[teamKey(g.b)])
+    tags.push(["hot", "both pairs new tonight"]);
+  const aAll = C.all.partner[teamKey(g.a)] || 0, bAll = C.all.partner[teamKey(g.b)] || 0;
+  if (!aAll || !bAll)
+    tags.push(["hot", aAll || bAll ? "a pairing never played" : "neither pair has played"]);
+  // named for the game, not for who wins it
+  if (q >= 88) tags.push(["hot", "coin flip"]);
+  else if (q < 45)
+    tags.push(["warn", `about ${Math.abs(marginOf(g.a, g.b)).toFixed(0)} points apart`]);
+  return tags;
+}
+
+/* The leading suggestion is shown in full; the alternatives are one line each.
+ * Four full cards ran to 1,644px of a 4,192px page -- more than the games being
+ * played -- and the point of an alternative is to be compared, not studied. */
+function gameLine(g, C, court, courts, compact) {
+  /* A small game has no partnership and no favourite, so it gets neither a
+   * quality meter nor the partner badges -- and it is drawn from every side,
+   * not from `a` and `b`, which silently lost the third player and printed
+   * a name followed by "& undefined" for a singles. */
+  if (isSmall(g)) {
+    const who = sidesOf(g).map((t) => esc(t.join(" & ")));
+    const label = g.kind === "singles" ? "Singles" : "Three-way";
+    return `
+      <div class="sug-game small${compact ? " compact" : ""}">
+        <div class="sug-line">
+          <span class="sug-court">${label}</span>
+          <span class="sug-teams">${who.join('<i> v </i>')}</span>
+        </div>
+        <div class="why"><span class="tag">${
+          g.kind === "singles" ? "the spare court, one on one"
+                               : "the spare court, everyone for themselves"
+        }</span></div>
+      </div>`;
+  }
+  const q = qualityOf(g);
+  const band = q >= 80 ? " hi" : q >= 55 ? " mid" : " lo";
+  if (compact) {
+    // Badges appear on every option now, not only the first. All three are
+    // meant to be picked from, and an option you cannot judge is not an option.
+    const tags = gameTags(g, C);
+    return `
+      <div class="sug-game compact">
+        <div class="sug-line">
+          ${courts > 1 ? `<span class="sug-court">${court}</span>` : ""}
+          <span class="sug-teams">${esc(g.a.join(" & "))}<i> v </i>${esc(g.b.join(" & "))}</span>
+          <span class="qnum${band}">${q}</span>
+        </div>
+        ${tags.length ? `<div class="why">${tags.map(([k, t]) =>
+          `<span class="tag ${k}">${esc(t)}</span>`).join("")}</div>` : ""}
+      </div>`;
+  }
+  return `
+    <div class="sug-game">
+      ${courts > 1 ? `<div class="sug-court">Court ${court}</div>` : ""}
+      <div class="optteams">
+        <span class="ta">${teamHTML(g.a)}</span>
+        <span class="v">v</span>
+        <span class="tb">${teamHTML(g.b)}</span>
+      </div>
+      <div class="qrow">
+        <span class="qlab">Game quality</span>
+        <span class="qmeter"><i class="${band.trim()}" style="width:${Math.max(2, q)}%"></i></span>
+        <span class="qnum${band}">${q}</span>
+      </div>
+      <div class="why">${gameTags(g, C).map(([k, t]) =>
+        `<span class="tag ${k}">${esc(t)}</span>`).join("")}</div>
+    </div>`;
+}
+
+function renderSuggestions() {
+  const host = $("#suggestions");
+  host.innerHTML = "";
+  if (!LOG.length) {
+    host.innerHTML = `<p class="note">No games to work from yet. Open
+      <b>Where the games come from</b> below and paste the address of your
+      published CSV &mdash; every name in the app is read from it.</p>`;
+    $("#sugHead").textContent = "Suggestions";
+    $("#sugNote").textContent = "";
+    return;
+  }
+  if (S.here.length < 4) {
+    host.innerHTML = `<p class="note">Pick who turned up and suggestions appear here.</p>`;
+    $("#sugHead").textContent = "Suggestions";
+    $("#sugNote").textContent = "";      // else the last valid count persists
+    return;
+  }
+  const opts = suggestions(3);
+  const k = roundSize();
+  $("#sugHead").textContent = "Suggestions";
+  const missed = opts.length && opts.metFloor === false;
+  const anySmall = opts.some((o) => o.rounds.some((r) => r.games.some(isSmall)));
+  const sitN = opts.length ? opts[0].rounds[0].sit.length : S.here.length - 4 * k;
+  $("#sugNote").textContent = opts.length && opts[0].paired
+    ? `${S.here.length} here on ${k} court${k === 1 ? "" : "s"} — one round leaves exactly `
+      + `the other, so these are picked as a pair.`
+    : anySmall
+      ? `${4 * k} on ${k === 1 ? "the court" : "the courts"}, and the other `
+        + `${S.here.length - 4 * k} take the spare court rather than sit.`
+      : sitN
+        ? `${4 * k} on court, ${sitN} sitting each game.`
+        : `${4 * k} on court, nobody sitting.`;
+  if (missed) {
+    $("#sugNote").textContent += ` Nothing reaches quality ${S.minQ} with who is `
+      + `here — these are the closest games available.`;
+  }
+
+  if (!opts.length) {
+    host.innerHTML = `<p class="note">Every suggestion turned down.
+      <button class="btn small ghost" id="undiscard">Start over</button></p>`;
+    $("#undiscard").onclick = () => { S.discarded = []; save(); render(); };
+    return;
+  }
+
+  const C = CTX;
+  opts.forEach((o, n) => {
+    const compact = n > 0;
+    const card = document.createElement("article");
+    card.className = "opt" + (n === 0 ? " lead" : " alt");
+    const body = o.rounds.map((r, ri) => {
+      const head = o.rounds.length > 1
+        ? `<div class="optlab">${ri === 0 ? "First" : "Then"}</div>` : "";
+      const sitLine = (!compact && o.rounds.length === 1 && r.sit.length)
+        ? `<div class="why"><span class="tag">sitting: ${esc(r.sit.join(", "))}</span></div>`
+        : (compact && r.sit.length && ri === 0
+            ? `<div class="sug-sit">sitting ${esc(r.sit.join(", "))}</div>` : "");
+      return `<div class="optgame">${head}` +
+        r.games.map((g, gi) => gameLine(g, C, gi + 1, k, compact)).join("") +
+        sitLine + `</div>`;
+    }).join("");
+
+    card.innerHTML = `<div class="optn">${n + 1}</div><div class="optbody">${body}</div>`;
+
+    const det = document.createElement("div");
+    det.className = "details hidden";
+    det.innerHTML = detailsHTML(o, C);
+    card.appendChild(det);
+
+    const acts = document.createElement("div");
+    acts.className = "optacts";
+    const nGames = o.rounds.reduce((t, r) => t + r.games.length, 0);
+    const add = document.createElement("button");
+    add.className = "btn small" + (n === 0 ? " primary" : "");
+    add.type = "button";
+    add.textContent = nGames > 1 ? `Plan these ${nGames}` : "Plan this game";
+    add.onclick = () => {
+      /* Round ids have to keep climbing across the whole night. Counting from
+       * the plan alone restarted them at 1 every time the queue emptied, and
+       * then lastPlayedRound() matched every game ever played, so "who sat last
+       * round" came back as nobody and the back-to-back guard quietly stopped
+       * working after the first round. */
+      let round = nextRound();
+      for (const r of o.rounds) {
+        r.games.forEach((g, i) => S.plan.push({
+          id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).slice(0, 8),
+          round, court: i + 1, a: g.a, b: g.b, sit: r.sit, sa: 0, sb: 0,
+        }));
+        round++;
+      }
+      S.discarded = [];
+      save(); render();
+      toast(nGames > 1 ? `${nGames} games planned` : "Game planned");
+    };
+    const drop = document.createElement("button");
+    drop.className = "btn small ghost"; drop.type = "button";
+    drop.textContent = "Not this";
+    drop.setAttribute("aria-label", "Discard this suggestion");
+    drop.onclick = () => { S.discarded.push(o.key); save(); render(); };
+    const more = document.createElement("button");
+    more.className = "btn small ghost"; more.type = "button";
+    more.textContent = "Details";
+    more.setAttribute("aria-expanded", "false");
+    more.onclick = () => {
+      const open = det.classList.toggle("hidden");
+      more.setAttribute("aria-expanded", open ? "false" : "true");
+      more.textContent = open ? "Details" : "Hide";
+    };
+    acts.append(add, more, drop);
+    card.appendChild(acts);
+    host.appendChild(card);
+  });
+}
+
+/**
+ * Why this suggestion, in the terms the sliders are set in.
+ *
+ * The planner ranks on one number, which is no use for judging an option
+ * against the other two. This breaks that number back out: how even each game
+ * is, how fresh the partnerships are tonight and over the whole log, who is
+ * being rested, and what any small game costs the people in it.
+ */
+function detailsHTML(o, C) {
+  const rows = [];
+  const games = o.rounds.flatMap((r) => r.games);
+  const doubles = games.filter((g) => !isSmall(g));
+
+  const qs = doubles.map(qualityOf);
+  if (qs.length) {
+    const worst = Math.min(...qs);
+    rows.push(["Game quality", qs.join(" · "),
+      S.minQ ? (worst >= S.minQ ? `clears ${S.minQ}` : `below ${S.minQ}`)
+             : (qs.length > 1 ? `worst ${worst}` : "")]);
+  }
+
+  let freshNight = 0, freshEver = 0, pairs = 0;
+  for (const g of doubles) {
+    for (const t of [g.a, g.b]) {
+      pairs++;
+      if (!C.night.partner[teamKey(t)]) freshNight++;
+      if (!C.all.partner[teamKey(t)]) freshEver++;
+    }
+  }
+  if (pairs) {
+    rows.push(["New partners tonight", `${freshNight} of ${pairs}`,
+      freshNight === pairs ? "all new" : ""]);
+    rows.push(["Never partnered before", `${freshEver} of ${pairs}`,
+      freshEver ? "first time" : ""]);
+  }
+
+  const sitting = o.rounds[0].sit;
+  rows.push(["Sitting", sitting.length ? sitting.join(", ") : "nobody",
+    sitting.filter((p) => C.lastSit.has(p)).length ? "sat last round too" : ""]);
+
+  const counts = S.here.map((p) => C.played[p]);
+  rows.push(["Court time so far", `${Math.min(...counts)}\u2013${Math.max(...counts)} games`,
+    Math.max(...counts) - Math.min(...counts) <= 1 ? "even" : ""]);
+
+  const small = games.find(isSmall);
+  if (small) {
+    const who = playersOf(small);
+    const repeat = who.filter((p) => (C.smallCount[p] || 0) > 0);
+    rows.push([SMALL_LABEL[small.kind] === "singles" ? "Singles" : "Three-way",
+      who.join(", "),
+      repeat.length ? `${repeat.join(", ")} had one already` : "first tonight for all"]);
+  }
+
+  return `<table class="dtable">` + rows.map(([k, v, note]) =>
+    `<tr><th>${esc(k)}</th><td>${esc(v)}</td>` +
+    `<td class="dnote">${esc(note || "")}</td></tr>`).join("") + `</table>`;
+}
+
+/* ------------------------------------------------------- 5 · where it reads
+
+   Every name in the app comes out of this file. Nothing is built in, so
+   pointing it somewhere else is all it takes to run a different group's night.
+*/
+function renderSource() {
+  const linked = linkSource();
+  const url = sourceUrl();
+  $("#sourceBody").classList.toggle("hidden", !S.sourceOpen);
+  $("#sourceToggle").setAttribute("aria-expanded", S.sourceOpen ? "true" : "false");
+  $("#sourceSum").textContent = LOG.length
+    ? `${LOG.length} games, through ${lastDate()}`
+    : "no source set \u2014 tap to add one";
+  const box = $("#sourceUrl");
+  if (document.activeElement !== box) box.value = url;
+
+  const status = $("#sourceStatus");
+  if (!status.textContent) {
+    status.className = "note";
+    status.textContent = linked
+      ? "Set by the link this page was opened with."
+      : LOG.length ? "" : "Paste the address of a published CSV and press Load.";
+  }
+  $("#sourceReset").classList.toggle("hidden", !BOOT.csv);
+}
+
+/* ---------------------------------------------------- 4 · an unplanned game
+
+   Games happen that nobody queued -- a fifth turns up, two courts swap, someone
+   calls a rematch. This logs one directly, on the same footing as a planned
+   game: it lands in tonight's results, the standings, the ratings and the CSV.
+*/
+function renderCustom() {
+  const host = $("#custom");
+  const known = rosterOf(allGames());
+  S.here.forEach((p) => { if (!known.includes(p)) known.push(p); });
+  known.sort();
+
+  const c = S.custom;
+  const chosen = c.p.filter(Boolean);
+  const dupes = chosen.length !== new Set(chosen).size;
+  const full = chosen.length === 4 && !dupes;
+  const sa = parseInt(c.sa, 10), sb = parseInt(c.sb, 10);
+  const scored = !isNaN(sa) && !isNaN(sb) && sa !== sb && Math.max(sa, sb) > 0;
+
+  const pick = (i) => `<select class="cpick" data-i="${i}"
+      aria-label="Player ${i + 1}"><option value="">player</option>` +
+    known.map((p) => `<option value="${esc(p)}"${p === c.p[i] ? " selected" : ""}>` +
+      `${esc(p)}</option>`).join("") + `</select>`;
+
+  host.innerHTML = `
+    <div class="cteam a">
+      ${pick(0)}${pick(1)}
+      <input class="cscore" inputmode="numeric" maxlength="2" data-s="sa"
+             value="${esc(c.sa)}" placeholder="0" aria-label="Score for the first team">
+    </div>
+    <div class="cteam b">
+      ${pick(2)}${pick(3)}
+      <input class="cscore" inputmode="numeric" maxlength="2" data-s="sb"
+             value="${esc(c.sb)}" placeholder="0" aria-label="Score for the second team">
+    </div>
+    <p class="note cnote">${
+      dupes ? "Someone is on both teams."
+      : !full ? "Pick four players."
+      : !scored ? "Enter the final score."
+      : `${(sa > sb ? [c.p[0], c.p[1]] : [c.p[2], c.p[3]]).join(" & ")} win `
+        + `${Math.max(sa, sb)}\u2013${Math.min(sa, sb)}.`}</p>`;
+
+  const add = document.createElement("button");
+  add.className = "btn primary wide"; add.type = "button";
+  add.textContent = "Add to tonight";
+  add.disabled = !(full && scored);
+  add.onclick = () => {
+    S.games.push({ a: [c.p[0], c.p[1]], b: [c.p[2], c.p[3]], sa, sb });
+    // anyone logged this way is plainly here, so the roster follows
+    c.p.forEach((p) => { if (!S.here.includes(p)) S.here.push(p); });
+    S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
+    S.discarded = [];
+    save(); render();
+    toast("Game added to tonight");
+  };
+  host.appendChild(add);
+}
+
+/* ------------------------------------------------------------- 3 · played */
+
+function renderPlayed() {
+  const has = S.games.length > 0;
+  $("#playedSec").classList.toggle("hidden", !has);
+  if (!has) return;
+  $("#playedHead").textContent = `Played tonight · ${S.games.length}`;
+
+  const host = $("#log");
+  host.innerHTML = "";
+  S.games.forEach((g, i) => {
+    const aWon = g.sa >= Math.max(...scoresOf(g));
+    const row = document.createElement("div");
+    row.className = "logrow" + (isSmall(g) ? " smallrow" : "");
+    row.innerHTML =
+      `<span class="n">${i + 1}</span>` +
+      `<span class="who">` +
+      sidesOf(g).map((t, n) => `<span class="${
+        scoresOf(g)[n] >= Math.max(...scoresOf(g)) ? "won" : "lost"
+      }">${esc(t.join(" & "))}</span>`).join(` <span class="lost">v</span> `) +
+      (isSmall(g) ? ` <span class="smalltag">${SMALL_LABEL[g.kind]}</span>` : "") +
+      `</span>` +
+      // the score is editable in place: a mistyped 11-9 should not need
+      // the game deleting and entering again
+      `<span class="sc">` +
+      `<input class="logscore" inputmode="numeric" maxlength="2" value="${g.sa}" ` +
+      `data-i="${i}" data-s="sa" aria-label="Score for ${esc(g.a.join(" and "))}">` +
+      `<i>–</i>` +
+      `<input class="logscore" inputmode="numeric" maxlength="2" value="${g.sb}" ` +
+      `data-i="${i}" data-s="sb" aria-label="Score for ${esc(g.b.join(" and "))}">` +
+      `</span>`;
+    const x = document.createElement("button");
+    x.className = "x"; x.type = "button"; x.innerHTML = "&times;";
+    x.setAttribute("aria-label",
+      `Delete game ${i + 1}, ${g.a.join(" and ")} versus ${g.b.join(" and ")}`);
+    x.onclick = async () => {
+      // Removes the game from the log, the standings, the ratings and the CSV,
+      // with nothing to undo it.
+      if (!await ask(`Delete game ${i + 1}? ${g.a.join(" & ")} ${g.sa}\u2013${g.sb} `
+        + `${g.b.join(" & ")}`, "Delete")) return;
+      S.games.splice(i, 1); save(); render(); toast("Game deleted");
+    };
+    row.appendChild(x);
+    host.appendChild(row);
+  });
+  renderTally();
+}
+
+function restStreaks() {
+  const r = Object.fromEntries(S.here.map((p) => [p, 0]));
+  const done = new Set();
+  for (let i = S.games.length - 1; i >= 0 && done.size < S.here.length; i--) {
+    const on = new Set(playersOf(S.games[i]));
+    for (const p of S.here) {
+      if (done.has(p)) continue;
+      if (on.has(p)) done.add(p); else r[p]++;
+    }
+  }
+  return r;
+}
+
+function renderTally() {
+  const rest = restStreaks();
+  const planned = Object.fromEntries(S.here.map((p) => [p, 0]));
+  S.plan.forEach((g) => playersOf(g).forEach((p) => {
+    if (p in planned) planned[p]++;
+  }));
+  const rows = S.here.map((p) => {
+    let w = 0, l = 0, pf = 0, pa = 0, sat = 0;
+    for (const g of S.games) {
+      const sides = sidesOf(g), sc = scoresOf(g);
+      const n = sides.findIndex((t) => t.includes(p));
+      if (n < 0) { sat++; continue; }
+      const mine = sc[n];
+      // in a three-way, "against" is whoever else did best
+      const theirs = Math.max(...sc.filter((_, i) => i !== n));
+      pf += mine; pa += theirs;
+      if (mine > theirs) w++; else l++;
+    }
+    return { p, w, l, d: pf - pa, sat, rest: rest[p], up: planned[p] };
+  });
+  rows.sort((x, y) => (y.w - y.l) - (x.w - x.l) || y.d - x.d);
+  $("#tallyBody").innerHTML = rows.map((r) => `
+    <tr><td>${esc(r.p)}</td><td>${r.w}</td><td class="dim">${r.l}</td>
+    <td class="${r.d > 0 ? "pos" : r.d < 0 ? "neg" : "dim"}">${r.d > 0 ? "+" : ""}${r.d}</td>
+    <td class="dim">${r.sat}</td>
+    <td class="${r.up ? "" : "dim"}">${r.up || "–"}</td></tr>`).join("");
+}
+
+/* ---- colour, and why the chart changes shape --------------------------
+ *
+ * Categorical hues from the validated reference palette. The validator says
+ * only the first three -- blue, orange, aqua -- clear the all-pairs floors in
+ * both light and dark; a search over every four- and five-hue subset of the
+ * eight found none that passes in both. That is a real limit, not a nuisance:
+ * at four lines two of them genuinely are hard to tell apart, and the failing
+ * failing pair -- a magenta against a red, dE 13.2 -- was on screen.
+ *
+ * So the form follows the count instead of the palette being stretched. Up to
+ * three players overlay as lines. Past that the chart facets into small
+ * multiples -- one panel each, one colour, a shared scale -- which needs no
+ * colour discrimination at all and, on a phone, reads better than six crossing
+ * lines. Selection stays unlimited either way.
+ */
+const OVERLAY_MAX = 3, SERIES = 8;
+const chartMinGames = () => Math.min(20, Math.max(4, Math.floor(LOG.length / 18)));
+
+function chartable() {
+  const total = {};
+  LOG.forEach((g) => playersOf(g).forEach((p) => { total[p] = (total[p] || 0) + 1; }));
+  return Object.keys(total)
+    .filter((p) => total[p] >= chartMinGames())
+    .sort((x, y) => total[y] - total[x])
+    .slice(0, SERIES);            // never cycle a hue onto a ninth player
+}
+let CHARTABLE = chartable();
+
+/** Together or separate. Follows the count until the reader says otherwise,
+ *  then stays put -- three lines is where the palette stops being safe, not
+ *  where the question stops being interesting. */
+function chartMode() {
+  return S.chartMode || (S.shown.length > OVERLAY_MAX ? "separate" : "together");
+}
+
+/** One hue per player, fixed by their place in the roster rather than in the
+ *  current selection, so filtering never repaints the survivors. */
+function seriesColor(player) {
+  if (chartMode() === "separate") return "var(--court)";
+  const i = CHARTABLE.indexOf(player);
+  return i < 0 ? "var(--ink-3)" : `var(--s${i + 1})`;
+}
+
+/* Every line is solid. Dashes were carrying the secondary encoding the colour
+ * rules ask for past three series, but a dotted line is harder to follow than
+ * a slightly-close hue -- which is the thing the encoding was supposed to
+ * help. Identity rests on the direct label welded to each line's end and on
+ * the table below, both of which name the player outright. */
+
+function renderRatings() {
+  const games = allGames();
+  const roster = rosterOf(games);
+
+  $$("#winSeg button").forEach((b) =>
+    b.setAttribute("aria-pressed", Number(b.dataset.w) === S.window ? "true" : "false"));
+  $$("#modeSeg button").forEach((b) =>
+    b.setAttribute("aria-pressed", b.dataset.m === chartMode() ? "true" : "false"));
+
+  CHARTABLE = chartable();
+  if (!S.shown.length) {
+    const recent = games.slice(-60), c = {};
+    recent.forEach((g) => playersOf(g).forEach((p) => { c[p] = (c[p] || 0) + 1; }));
+    S.shown = CHARTABLE.filter((p) => c[p]).sort((x, y) => c[y] - c[x]).slice(0, 3);
+  }
+  S.shown = S.shown.filter((p) => CHARTABLE.includes(p));
+
+  const total = {};
+  games.forEach((g) => playersOf(g).forEach((p) => { total[p] = (total[p] || 0) + 1; }));
+  const host = $("#chartPick");
+  host.innerHTML = "";
+  for (const p of CHARTABLE) {
+    const on = S.shown.includes(p);
+    const b = document.createElement("button");
+    b.className = "chip swatch"; b.type = "button";
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    const faceted = chartMode() === "separate";
+    b.style.setProperty("--sw", on ? seriesColor(p) : "var(--rule-2)");
+    b.innerHTML = (on && faceted ? "" : "<i></i>") +
+      `${esc(p)}<span class="r">${total[p]}</span>`;
+    b.onclick = () => {
+      const i = S.shown.indexOf(p);
+      if (i >= 0) { if (S.shown.length > 1) S.shown.splice(i, 1); }
+      else S.shown.push(p);
+      save(); renderRatings();
+    };
+    host.appendChild(b);
+  }
+
+  const full = ratingSeries(games, roster, S.window);
+  const series = sliceRange(full);
+  renderRange(full, series);
+  drawChart(series, roster, games);
+  ratingNote();
+  renderImpact(series, roster, games);
+}
+
+/** The visible slice of the fitted series, from the two range handles. */
+function sliceRange(full) {
+  if (!full.length) return full;
+  const r = S.range;
+  if (!r) return full;
+  const lo = Math.max(0, Math.min(full.length - 2, Math.round(r[0] * (full.length - 1))));
+  const hi = Math.max(lo + 1, Math.min(full.length - 1, Math.round(r[1] * (full.length - 1))));
+  return full.slice(lo, hi + 1);
+}
+
+function renderRange(full, shown) {
+  const from = $("#fromR"), to = $("#toR");
+  if (!full.length) { $("#rangeNote").textContent = ""; return; }
+  const r = S.range || [0, 1];
+  from.value = Math.round(r[0] * 100);
+  to.value = Math.round(r[1] * 100);
+  const a = shown[0], b = shown[shown.length - 1];
+  $("#rangeNote").textContent = shown.length === full.length
+    ? `All ${full.length} fitted games, ${a.date} to ${b.date}.`
+    : `${shown.length} of ${full.length} fitted games, ${a.date} to ${b.date}.`;
+}
+
+/** What the chart is showing, and what it deliberately is not. */
+function ratingNote() {
+  const off = rosterOf(LOG).filter((p) => !CHARTABLE.includes(p));
+  const w = S.window ? `last ${S.window} games` : "whole log";
+  $("#ratingNote").innerHTML =
+    `Points per game added to your team, refitted over the <b>${w}</b> after ` +
+    `every game. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
+    `games inside the window &mdash; ridge would pull them to zero, which reads as ` +
+    `"average" when it means "wasn't there".` +
+    (off.length ? ` Not plotted: <b>${off.join(", ")}</b>, under ${chartMinGames()} ` +
+      `games in the log.` : "");
+}
+
+/**
+ * What each game moved -- that game, and nothing else.
+ *
+ * The obvious reading, the step from one fitted point to the next, is wrong:
+ * between those two fits the window *slides*, so game t arrives and game t-40
+ * leaves at the same moment. A winner could show a fall because the game
+ * dropping off the back had been better for them than the one just played.
+ *
+ * So both fits start at the same game and differ only in whether the new one
+ * is included: [t-w+1, t-1] against [t-w+1, t]. Nothing leaves. The mean move
+ * across the rated players is then subtracted, because one game cannot lift
+ * everybody -- a rating is a comparison, and this is the same reason Form is
+ * zero-sum.
+ */
+const IMPACT_ROWS = 200;
+
+function renderImpact(series, roster, games) {
+  const host = $("#impact");
+  host.innerHTML = "";
+  if (series.length < 2) {
+    host.innerHTML = `<p class="note">Not enough fitted games in this range.</p>`;
+    $("#impactHead").textContent = "Game by game";
+    return;
+  }
+
+  const w = S.window;
+  const rows = [];
+  for (let n = series.length - 1; n >= 0 && rows.length < IMPACT_ROWS; n--) {
+    const idx = series[n].i;
+    const g = games[idx];
+    if (!g) continue;
+    const from = w ? Math.max(0, idx - w + 1) : 0;
+    if (idx - from < MIN_IN_WINDOW) continue;
+
+    const before = ridge(games.slice(from, idx), roster);
+    const after = ridge(games.slice(from, idx + 1), roster);
+    const raw = roster.map((p, i) => after.beta[i] - before.beta[i]);
+    const rated = roster
+      .map((p, i) => i)
+      .filter((i) => before.games[i] >= MIN_IN_WINDOW && after.games[i] >= MIN_IN_WINDOW);
+    const mu = rated.length
+      ? rated.reduce((t, i) => t + raw[i], 0) / rated.length : 0;
+
+    const deltas = playersOf(g).map((p) => {
+      const i = roster.indexOf(p);
+      if (i < 0 || after.games[i] < MIN_IN_WINDOW) return null;
+      return { p, d: raw[i] - mu };
+    }).filter(Boolean).sort((x, y) => y.d - x.d);
+
+    rows.push({ i: idx, date: g.date, g, deltas });
+  }
+
+  const total = series.length;
+  $("#impactHead").textContent = rows.length < total
+    ? `Game by game · last ${rows.length} of ${total}`
+    : `Game by game · ${rows.length}`;
+
+  host.innerHTML = rows.map((r) => `
+    <div class="irow" data-i="${r.i}">
+      <div class="ihead">
+        <span class="idate">${esc(r.date)}</span>
+        <span class="iteams">${sidesOf(r.g).map((t) => esc(t.join(" & ")))
+          .join('<i> v </i>')}</span>
+        <span class="iscore">${scoresOf(r.g).join("\u2013")}</span>
+      </div>
+      <div class="ideltas">${r.deltas.length
+        ? r.deltas.map((d) => `<span class="idelta ${d.d >= 0 ? "up" : "down"}">` +
+            `${esc(d.p)} <b>${signed(d.d, 2)}</b></span>`).join("")
+        : `<span class="idelta dim">not enough games in the window yet</span>`}</div>
+    </div>`).join("");
+}
+
+/** Light up the game the crosshair is on, and bring it into view. */
+let impactPinned = null;
+function highlightImpact(i) {
+  if (impactPinned === i) return;
+  impactPinned = i;
+  const host = $("#impact");
+  if (!host) return;
+  host.querySelectorAll(".irow.on").forEach((el) => el.classList.remove("on"));
+  if (i === null) return;
+  const row = host.querySelector(`.irow[data-i="${i}"]`);
+  if (!row) return;
+  row.classList.add("on");
+  const box = host.getBoundingClientRect(), r = row.getBoundingClientRect();
+  if (r.top < box.top || r.bottom > box.bottom) {
+    host.scrollTop += r.top - box.top - box.height / 2 + r.height / 2;
+  }
+}
+
+/* ---------------------------------------------------------------- the chart */
+const NS = "http://www.w3.org/2000/svg";
+const mk = (n, at, parent) => {
+  const e = document.createElementNS(NS, n);
+  for (const k in at) e.setAttribute(k, at[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+};
+
+/** Shared setup: the plotted points per player, and a common y domain. */
+function chartData(series, roster) {
+  const pts = {};
+  let lo = Infinity, hi = -Infinity;
+  for (const p of S.shown) {
+    const i = roster.indexOf(p);
+    pts[p] = series.map((s) => (s.games[i] >= MIN_IN_WINDOW ? { x: s.i, y: s.beta[i] } : null));
+    pts[p].forEach((q) => { if (q) { lo = Math.min(lo, q.y); hi = Math.max(hi, q.y); } });
+  }
+  if (!isFinite(lo)) return null;
+  const pad = Math.max(0.4, (hi - lo) * 0.12);
+  return { pts, lo: lo - pad, hi: hi + pad };
+}
+
+/** Date ticks, thinned to fit. */
+function dateTicks(series, games, iw) {
+  const ticks = [];
+  let seen = null;
+  series.forEach((s) => {
+    const d = games[s.i].date;
+    if (d !== seen) { ticks.push({ i: s.i, date: d }); seen = d; }
+  });
+  const every = Math.ceil(ticks.length / Math.max(2, Math.floor(iw / 62)));
+  return ticks.filter((_, n) => n % every === 0);
+}
+
+function drawChart(series, roster, games) {
+  const host = $("#chartWrap");
+  host.innerHTML = "";
+  if (!series.length || !S.shown.length) {
+    host.innerHTML = `<p class="note">Pick a player to plot.</p>`;
+    $("#figCap").textContent = "";
+    return;
+  }
+  const data = chartData(series, roster);
+  if (!data) {
+    host.innerHTML = `<p class="note">Nobody selected has enough games inside this
+      window. Try a wider one.</p>`;
+    $("#figCap").textContent = "";
+    return;
+  }
+  const mode = chartMode();
+  $("#figCap").textContent =
+    `Points per game added to your team · ${S.window ? "trailing " + S.window + " games" : "whole log"}`
+    + (mode === "separate"
+        ? ` · one panel each, shared scale ${signed(data.lo, 0)} to ${signed(data.hi, 0)}`
+        : S.shown.length > OVERLAY_MAX ? " · labelled at the line ends" : "");
+  (mode === "separate" ? drawFacets : drawOverlay)(host, series, roster, games, data);
+}
+
+/* ---- up to three players: one chart, validated hues -------------------- */
+function drawOverlay(host, series, roster, games, data) {
+  const W = Math.max(280, host.clientWidth || 320);
+  // grow with the series count: eight labels need 104px of ladder, and a
+  // 222px plot cannot hold that without them colliding
+  const H = Math.min(360, Math.max(200,
+    Math.round(W * 0.62) + Math.max(0, S.shown.length - 4) * 22));
+  const padL = 34, padR = 56, padT = 12, padB = 26;
+  const iw = W - padL - padR, ih = H - padT - padB;
+  const { pts, lo, hi } = data;
+  const x0 = series[0].i, x1 = series[series.length - 1].i;
+  const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
+  const Y = (v) => padT + (hi - v) / (hi - lo) * ih;
+
+  const svg = mk("svg", {
+    viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+    "aria-label": "Rating over time for the selected players",
+  }, host);
+
+  const step = niceStep(hi - lo);
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+    mk("line", { x1: padL, x2: padL + iw, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    mk("text", {
+      x: padL - 6, y: Y(v) + 3.5, "text-anchor": "end", fill: "var(--ink-3)",
+      "font-size": 10, "font-family": "var(--mono)",
+    }, svg).textContent = Math.abs(v) < 1e-9 ? "0" : signed(v, 0);
+  }
+  if (lo < 0 && hi > 0)
+    mk("line", { x1: padL, x2: padL + iw, y1: Y(0), y2: Y(0), stroke: "var(--rule-2)", "stroke-width": 1.5 }, svg);
+
+  dateTicks(series, games, iw).forEach((tk) => {
+    const [m, , y] = tk.date.split("/");
+    mk("text", {
+      x: X(tk.i), y: H - 8, "text-anchor": "middle", fill: "var(--ink-3)",
+      "font-size": 10, "font-family": "var(--mono)",
+    }, svg).textContent = `${m}/${String(y).slice(2)}`;
+  });
+
+  const ends = [];
+  for (const p of S.shown) {
+    let d = "", pen = false, lastQ = null;
+    for (const q of pts[p]) {
+      if (!q) { pen = false; continue; }
+      d += (pen ? "L" : "M") + X(q.x).toFixed(1) + " " + Y(q.y).toFixed(1) + " ";
+      pen = true; lastQ = q;
+    }
+    mk("path", {
+      d, fill: "none", stroke: seriesColor(p), "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round",
+    }, svg);
+    if (lastQ) ends.push({ p, x: X(lastQ.x), y: Y(lastQ.y), c: seriesColor(p) });
+  }
+
+  /* Direct labels: identity never rests on colour, and they double as the
+   * relief the validator asks for where a hue sits under 3:1 on this surface.
+   *
+   * Pushing labels apart used to move the endpoint dot with them, so at six or
+   * more series -- where most lines finish inside a couple of points of each
+   * other -- every label ended up beside a line that was not its own. The
+   * label moves; the dot stays on the line; a leader slopes between them. */
+  ends.forEach((e) => { e.y0 = e.y; });
+  ends.sort((a, b) => a.y0 - b.y0);
+  const lead = 13;
+  for (let i = 1; i < ends.length; i++)
+    if (ends[i].y - ends[i - 1].y < lead) ends[i].y = ends[i - 1].y + lead;
+  // keep the ladder inside the plot, then settle it back down from the bottom
+  const overflow = ends.length ? ends[ends.length - 1].y - (padT + ih) : 0;
+  if (overflow > 0) {
+    for (let i = ends.length - 1; i >= 0; i--) {
+      ends[i].y -= overflow;
+      if (i && ends[i].y - ends[i - 1].y >= lead) break;
+    }
+    for (let i = 1; i < ends.length; i++)
+      if (ends[i].y - ends[i - 1].y < lead) ends[i].y = ends[i - 1].y + lead;
+  }
+  ends.forEach((e) => {
+    mk("path", {
+      d: `M${e.x + 2} ${e.y0} L${padL + iw - 4} ${e.y0} L${padL + iw + 2} ${e.y}`,
+      fill: "none", stroke: e.c, "stroke-width": 1, opacity: .55,
+    }, svg);
+    mk("circle", { cx: e.x, cy: e.y0, r: 3, fill: e.c, stroke: "var(--card)", "stroke-width": 2 }, svg);
+    mk("text", {
+      x: padL + iw + 6, y: e.y + 3.5, fill: "var(--ink)", "font-size": 11, "font-weight": 700,
+    }, svg).textContent = e.p;
+  });
+
+  addCrosshair(svg, host, series, roster, { padT, ih, padL, iw, W, X, Y });
+}
+
+/* ---- four or more: small multiples, no colour discrimination needed ---- */
+function drawFacets(host, series, roster, games, data) {
+  const W = Math.max(280, host.clientWidth || 320);
+  const padL = 30, padR = 44, rowH = 62, gap = 6, padB = 22, padT = 4;
+  const n = S.shown.length;
+  const H = padT + n * rowH + (n - 1) * gap + padB;
+  const iw = W - padL - padR;
+  const { pts, lo, hi } = data;
+  const x0 = series[0].i, x1 = series[series.length - 1].i;
+  const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
+
+  const svg = mk("svg", {
+    viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+    "aria-label": "Rating over time, one panel per selected player",
+  }, host);
+
+  // ordered by where each player stands now, so the stack itself ranks them
+  const order = S.shown.slice().sort((a, b) => {
+    const la = pts[a].filter(Boolean), lb = pts[b].filter(Boolean);
+    return (lb.length ? lb[lb.length - 1].y : -99) - (la.length ? la[la.length - 1].y : -99);
+  });
+
+  order.forEach((p, k) => {
+    const top = padT + k * (rowH + gap);
+    const Y = (v) => top + (hi - v) / (hi - lo) * rowH;
+    mk("rect", { x: padL, y: top, width: iw, height: rowH, fill: "var(--sunk)", rx: 3 }, svg);
+    if (lo < 0 && hi > 0)
+      mk("line", { x1: padL, x2: padL + iw, y1: Y(0), y2: Y(0), stroke: "var(--rule-2)", "stroke-width": 1 }, svg);
+
+    let d = "", pen = false, lastQ = null;
+    for (const q of pts[p]) {
+      if (!q) { pen = false; continue; }
+      d += (pen ? "L" : "M") + X(q.x).toFixed(1) + " " + Y(q.y).toFixed(1) + " ";
+      pen = true; lastQ = q;
+    }
+    mk("path", {
+      d, fill: "none", stroke: "var(--court)", "stroke-width": 1.8,
+      "stroke-linejoin": "round", "stroke-linecap": "round",
+    }, svg);
+    if (lastQ) {
+      mk("circle", { cx: X(lastQ.x), cy: Y(lastQ.y), r: 3, fill: "var(--court)", stroke: "var(--card)", "stroke-width": 1.5 }, svg);
+      mk("text", {
+        x: padL + iw + 5, y: Y(lastQ.y) + 3.5, fill: "var(--ink)",
+        "font-size": 10.5, "font-weight": 700, "font-family": "var(--mono)",
+      }, svg).textContent = signed(lastQ.y);
+    }
+    mk("text", {
+      x: padL - 5, y: top + 12, "text-anchor": "end", fill: "var(--ink)",
+      "font-size": 11, "font-weight": 700,
+    }, svg).textContent = p;
+  });
+
+  // one shared x axis under the stack
+  dateTicks(series, games, iw).forEach((tk) => {
+    const [m, , y] = tk.date.split("/");
+    mk("text", {
+      x: X(tk.i), y: H - 7, "text-anchor": "middle", fill: "var(--ink-3)",
+      "font-size": 10, "font-family": "var(--mono)",
+    }, svg).textContent = `${m}/${String(y).slice(2)}`;
+  });
+}
+
+/** Crosshair + tooltip, for the overlay form. */
+function addCrosshair(svg, host, series, roster, g) {
+  const hair = mk("line", {
+    y1: g.padT, y2: g.padT + g.ih, stroke: "var(--ink-3)", "stroke-width": 1,
+    opacity: 0, "pointer-events": "none",
+  }, svg);
+  const dots = mk("g", { opacity: 0, "pointer-events": "none" }, svg);
+  const tip = document.createElement("div");
+  tip.className = "tip"; tip.hidden = true;
+  host.appendChild(tip);
+
+  const hit = mk("rect", { x: g.padL, y: g.padT, width: g.iw, height: g.ih, fill: "transparent" }, svg);
+  const moveTo = (clientX) => {
+    const r = svg.getBoundingClientRect();
+    const px = (clientX - r.left) * (g.W / r.width);
+    const frac = Math.min(1, Math.max(0, (px - g.padL) / g.iw));
+    const x0 = series[0].i, x1 = series[series.length - 1].i;
+    const want = x0 + frac * (x1 - x0);
+    let k = 0, best = Infinity;
+    series.forEach((s, i) => { const d = Math.abs(s.i - want); if (d < best) { best = d; k = i; } });
+    const s = series[k];
+    hair.setAttribute("x1", g.X(s.i)); hair.setAttribute("x2", g.X(s.i));
+    hair.setAttribute("opacity", .45);
+    dots.innerHTML = ""; dots.setAttribute("opacity", 1);
+    const lines = [];
+    for (const p of S.shown) {
+      const i = roster.indexOf(p);
+      if (s.games[i] < MIN_IN_WINDOW) continue;
+      mk("circle", {
+        cx: g.X(s.i), cy: g.Y(s.beta[i]), r: 4, fill: seriesColor(p),
+        stroke: "var(--card)", "stroke-width": 2,
+      }, dots);
+      lines.push([p, s.beta[i]]);
+    }
+    highlightImpact(s.i);
+    lines.sort((a, b) => b[1] - a[1]);
+    tip.innerHTML = `<b>${esc(s.date)}</b>` + lines.map(([p, v]) =>
+      `<span><i style="background:${seriesColor(p)}"></i>${esc(p)}<em>${signed(v)}</em></span>`).join("");
+    tip.hidden = false;
+    const r2 = svg.getBoundingClientRect();
+    tip.style.left = Math.min(Math.max(g.X(s.i) * (r2.width / g.W), 8), r2.width - 8) + "px";
+  };
+  const clear = () => {
+    hair.setAttribute("opacity", 0); dots.setAttribute("opacity", 0); tip.hidden = true;
+    highlightImpact(null);
+  };
+  hit.addEventListener("pointermove", (e) => moveTo(e.clientX));
+  hit.addEventListener("pointerdown", (e) => { hit.setPointerCapture(e.pointerId); moveTo(e.clientX); });
+  hit.addEventListener("pointerleave", clear);
+  hit.addEventListener("pointerup", clear);
+}
+
+/** A grid step that lands on 1/2/5 x 10^n and gives 3-6 lines. */
+function niceStep(range) {
+  const raw = range / 4.5;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const n = raw / mag;
+  return (n < 1.5 ? 1 : n < 3.5 ? 2 : n < 7.5 ? 5 : 10) * mag;
+}
+
+
+/* ==================================================================== misc */
+function renderFoot() {
+  const html = `
+    <p><b>Ratings</b> are a ridge regression (&alpha;&nbsp;=&nbsp;0.5) of score
+    differential on a &plusmn;1 team matrix &mdash; a player&rsquo;s value is the
+    points per game they add to their side, so a matchup&rsquo;s expected margin
+    is one team&rsquo;s two values minus the other&rsquo;s.</p>
+    <p><b>Game quality</b> is 100 for a coin flip and falls as the expected
+    margin grows: that margin is pushed through the exact mathematics of a race
+    to ${S.target}, win by 2, and the resulting win probability is turned back
+    into a single number. Which side is favoured is deliberately not shown.</p>
+    <p>Data: ${LOG.length} games through ${lastDate()} &mdash;
+    ${SOURCE === "none" ? "<b>no source set yet</b>" : `the <b>${SOURCE}</b> copy`}.
+    Tonight&rsquo;s results count toward the ratings and the novelty counts as
+    you enter them, but nothing is written back to the sheet; use
+    <b>Copy tonight as CSV</b> for that. Everything stays on this device.</p>`;
+  $("#foot").innerHTML = html;
+  $("#foot2").innerHTML = html;
+}
+
+function csvText() {
+  const head = "Date,Team 1 - Player 1,Team 1 - Player 2,Team 2 - Player 1,Team 2 - Player 2,Team 1 Score,Team 2 Score";
+  // the sheet has four player columns and assumes doubles, so a singles or
+  // three-way result has nowhere to go in it
+  return [head].concat(S.games.filter((g) => !isSmall(g)).map(
+    (g) => [todayStr(), g.a[0], g.a[1], g.b[0], g.b[1], g.sa, g.sb].join(","))).join("\n");
+}
+function copyCsv() {
+  const text = csvText();
+  const holder = $("#csvOut");
+  holder.innerHTML = `<textarea class="csvbox" rows="${Math.min(S.games.length + 2, 10)}" readonly></textarea>`;
+  const ta = holder.querySelector("textarea");
+  ta.value = text; holder.classList.remove("hidden");
+  const fallback = () => { ta.select(); toast("Select and copy the rows below"); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => toast(`${S.games.length} rows copied`)).catch(fallback);
+  } else fallback();
+}
+
+/* ================================================================== wiring */
+function wire() {
+  $$("#tabs button").forEach((b) => {
+    b.onclick = () => { S.tab = b.dataset.tab; save(); render(); window.scrollTo({ top: 0 }); };
+  });
+  $("#prefsToggle").onclick = () => { S.prefsOpen = !S.prefsOpen; save(); render(); };
+  $("#rosterToggle").onclick = () => { S.rosterOpen = !rosterOpen(); save(); render(); };
+  $("#minQ").oninput = (e) => {
+    S.minQ = Q_STEPS[Number(e.target.value)] ?? 0;
+    $("#minQVal").textContent = S.minQ ? S.minQ : "any";
+    S.discarded = []; save();
+    renderSuggestions(); renderPrefs();
+  };
+
+  const addName = () => {
+    const el = $("#newName");
+    const name = el.value.trim().replace(/\s+/g, " ");
+    if (!name) return;
+    const clash = knownPlayers().list.find(
+      (p) => p.toLowerCase() === name.toLowerCase());
+    if (clash) {
+      if (!S.here.includes(clash)) S.here.push(clash);
+      el.value = ""; save(); render();
+      return toast(clash + " is already on the list");
+    }
+    if (!S.extra.includes(name)) S.extra.push(name);
+    if (!S.here.includes(name)) S.here.push(name);
+    el.value = "";
+    S.discarded = [];
+    save(); render();
+    toast(name + " added");
+  };
+  $("#newAdd").onclick = addName;
+  $("#newName").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addName(); } };
+  $$("[data-preset]").forEach((b) => {
+    b.onclick = () => {
+      const preset = { ...PRESETS[b.dataset.preset] };
+      S.minQ = preset.minQ;
+      delete preset.minQ;
+      S.w = preset;
+      S.discarded = []; save(); render();
+      toast("Priorities set");
+    };
+  });
+  $$("#courtSeg button").forEach((b) => {
+    b.onclick = () => { S.courts = Number(b.dataset.c); S.discarded = []; save(); render(); };
+  });
+  $$("#winSeg button").forEach((b) => {
+    b.onclick = () => { S.window = Number(b.dataset.w); save(); renderRatings(); renderMeta(); };
+  });
+  $$("#modeSeg button").forEach((b) => {
+    b.onclick = () => { S.chartMode = b.dataset.m; save(); renderRatings(); };
+  });
+  const onRange = () => {
+    let lo = Number($("#fromR").value) / 100, hi = Number($("#toR").value) / 100;
+    if (lo > hi) { const t = lo; lo = hi; hi = t; }
+    S.range = (lo <= 0 && hi >= 1) ? null : [lo, hi];
+    save(); renderRatings();
+  };
+  $("#fromR").oninput = onRange;
+  $("#toR").oninput = onRange;
+  $("#rangeAll").onclick = () => { S.range = null; save(); renderRatings(); };
+
+  /* Score entry is delegated: the planned cards are rebuilt on every render,
+     so per-element handlers would go stale the moment a game is saved. */
+  const planHost = $("#plan");
+
+  planHost.addEventListener("input", (e) => {
+    const el = e.target.closest(".sscore");
+    if (!el) return;
+    const g = S.plan.find((x) => x.id === el.dataset.g);
+    if (!g) return;
+    const v = parseInt(el.value.replace(/\D/g, ""), 10);
+    g[el.dataset.s === "a" ? "sa" : "sb"] = isNaN(v) ? 0 : Math.min(99, v);
+    save();
+    refreshSave(g);            // repaint only the button, so the caret stays put
+  });
+  planHost.addEventListener("focusin", (e) => {
+    const el = e.target.closest(".sscore");
+    if (el) el.select();
+  });
+  planHost.addEventListener("focusout", (e) => {
+    if (e.target.closest(".sscore")) { renderPlan(); renderTally(); }
+  });
+
+  $("#log").addEventListener("input", (e) => {
+    const el = e.target.closest(".logscore");
+    if (!el) return;
+    const g = S.games[Number(el.dataset.i)];
+    if (!g) return;
+    const v = parseInt(el.value.replace(/\D/g, ""), 10);
+    g[el.dataset.s] = isNaN(v) ? 0 : Math.min(99, v);
+    save();
+    renderTally();          // the standings follow, the row itself can wait
+  });
+  $("#log").addEventListener("focusin", (e) => {
+    const el = e.target.closest(".logscore");
+    if (el) el.select();
+  });
+  $("#log").addEventListener("focusout", (e) => {
+    if (e.target.closest(".logscore")) render();
+  });
+
+  const customHost = $("#custom");
+  customHost.addEventListener("change", (e) => {
+    const el = e.target.closest(".cpick");
+    if (!el) return;
+    S.custom.p[Number(el.dataset.i)] = el.value;
+    save(); renderCustom();
+  });
+  customHost.addEventListener("input", (e) => {
+    const el = e.target.closest(".cscore");
+    if (!el) return;
+    S.custom[el.dataset.s] = el.value.replace(/\D/g, "").slice(0, 2);
+    save();
+    // rebuild only the note and the button, so the field keeps its caret
+    const note = customHost.querySelector(".cnote");
+    const btn = customHost.querySelector(".btn");
+    const c = S.custom, chosen = c.p.filter(Boolean);
+    const full = chosen.length === 4 && chosen.length === new Set(chosen).size;
+    const sa = parseInt(c.sa, 10), sb = parseInt(c.sb, 10);
+    const scored = !isNaN(sa) && !isNaN(sb) && sa !== sb && Math.max(sa, sb) > 0;
+    if (btn) btn.disabled = !(full && scored);
+    if (note) note.textContent = !full ? "Pick four players."
+      : !scored ? "Enter the final score."
+      : `${(sa > sb ? [c.p[0], c.p[1]] : [c.p[2], c.p[3]]).join(" & ")} win `
+        + `${Math.max(sa, sb)}\u2013${Math.min(sa, sb)}.`;
+  });
+
+  $("#sourceToggle").onclick = () => { S.sourceOpen = !S.sourceOpen; save(); render(); };
+  $("#sourceLoad").onclick = async () => {
+    const url = $("#sourceUrl").value.trim();
+    if (!url) return;
+    const changing = (S.srcKey || "") !== url;
+    if (changing && (S.games.length || S.plan.length)) {
+      const n = S.games.length + S.plan.length;
+      if (!await ask(`Loading a different log clears tonight — ${n} game(s) `
+        + `and everyone marked as here. Carry on?`, "Load it")) return;
+    }
+    S.sourceUrl = url; save();
+    $("#sourceStatus").textContent = "";
+    loadSource(url, false).then(renderSource);
+  };
+  $("#sourceUrl").onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); $("#sourceLoad").click(); }
+  };
+  $("#sourceShare").onclick = () => {
+    const url = $("#sourceUrl").value.trim() || sourceUrl();
+    if (!url) return toast("Set a source first");
+    const link = location.origin + location.pathname + "?csv=" + encodeURIComponent(url);
+    const holder = $("#shareOut");
+    holder.innerHTML = `<textarea class="csvbox" rows="3" readonly></textarea>`;
+    const ta = holder.querySelector("textarea");
+    ta.value = link;
+    holder.classList.remove("hidden");
+    const fallback = () => { ta.select(); toast("Select and copy the link below"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link)
+        .then(() => toast("Link copied")).catch(fallback);
+    } else fallback();
+  };
+  $("#sourceReset").onclick = () => {
+    S.sourceUrl = "";
+    if ((S.srcKey || "") !== (BOOT.url || "")) { forgetPeople(); S.srcKey = BOOT.url || ""; }
+    save();
+    LOG = parseCsv(BOOT.csv || "");
+    SOURCE = BOOT.csv ? "snapshot" : "none";
+    CHARTABLE = chartable();
+    clearWpCache();
+    $("#sourceStatus").textContent = "";
+    render();
+    toast("Back to the built-in copy");
+  };
+
+  $("#btnCsv").onclick = copyCsv;
+  $("#btnReset").onclick = async () => {
+    const n = S.games.length, q = S.plan.length;
+    if (!await ask(`End the night? ${n} played and ${q} planned game(s) will be `
+      + `cleared.`, "End night")) return;
+    S.games = []; S.plan = []; S.discarded = [];
+    $("#csvOut").classList.add("hidden");
+    save(); render(); window.scrollTo({ top: 0 });
+  };
+
+  let rt = null;
+  window.addEventListener("resize", () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { if (S.tab === "ratings") renderRatings(); }, 180);
+  });
+}
+
+/** Update one planned game's Save button without a full redraw, so typing a
+ *  score does not steal focus from the field being typed into. */
+function refreshSave(g) {
+  const field = document.querySelector(`.sscore[data-g="${g.id}"]`);
+  if (!field) return;
+  const btn = field.closest(".slate").querySelector(".slateacts .primary");
+  if (!btn) return;
+  const done = isSmall(g) ? smallDone(g)
+    : Math.max(g.sa, g.sb) >= S.target && Math.abs(g.sa - g.sb) >= 2;
+  btn.disabled = !done || Date.now() < saveGuardUntil;
+  btn.textContent = done ? "Save \u2014 " + winnerOf(g).join(" & ") : "Save";
+}
+
+/**
+ * Why a read failed, in terms of the thing the reader can change.
+ *
+ * "Failed to fetch" covers three quite different situations and the fix is
+ * different in each, so they are told apart rather than lumped together. The
+ * first is the one that catches people out: a page opened straight from disk
+ * has no web address of its own, the browser sends `Origin: null`, and Google
+ * declines -- while the very same address downloads fine when typed into the
+ * bar, because navigating is not a cross-origin read. Confirmed both ways:
+ * from a file the fetch throws, and the identical file served over http reads
+ * all 13,293 bytes.
+ */
+function fetchFailure(url, err) {
+  if (location.protocol === "file:") {
+    return "This page was opened straight from a file, so the browser gives it "
+      + "no web address and Google turns the request down \u2014 even though the "
+      + "same link downloads fine when you type it in. Put the page on a host, "
+      + "or open the hosted link instead."
+      + (BOOT.csv ? " The games built into this copy still work offline." : "");
+  }
+  if (location.protocol === "https:" && /^http:/i.test(url)) {
+    return "Blocked: this page is https, so the address has to be https too.";
+  }
+  if (/claude\.ai/i.test(location.hostname)) {
+    return "This copy runs in a sandbox that blocks outside requests, so it "
+      + "cannot follow a link to a sheet. Use the hosted copy for live data.";
+  }
+  return `Could not read that address (${err.message}). It has to be a CSV `
+    + `served over https that allows cross-origin reads \u2014 in Sheets, `
+    + `File \u2192 Share \u2192 Publish to web, then comma-separated values.`;
+}
+
+/**
+ * Read a CSV of games from anywhere.
+ *
+ * A published Google Sheet allows cross-origin reads, but only for a page that
+ * has an origin to offer: the redirect it answers with echoes the caller's
+ * address, and there is nothing to echo for `file://`. So this works from a
+ * host and not from a double-clicked file, which is the opposite of what the
+ * download-it-yourself test suggests. fetchFailure() says which case it is.
+ */
+function loadSource(url, quiet) {
+  if (!url) return Promise.resolve(false);
+  const say = (msg, ok) => {
+    const el = $("#sourceStatus");
+    if (el) { el.textContent = msg; el.className = "note" + (ok ? " good" : " bad"); }
+    if (!quiet) toast(msg);
+  };
+  if (!quiet) say("Loading\u2026", true);
+  return fetch(url, { mode: "cors" })
+    .then((r) => (r.ok ? r.text() : Promise.reject(new Error("HTTP " + r.status))))
+    .then((text) => {
+      const fresh = parseCsv(text);
+      if (!fresh.length) {
+        say("That loaded, but no games were in it. The first row should be the "
+          + "column names, then one row per game.", false);
+        return false;
+      }
+      const grew = fresh.length - LOG.length;
+      // a different log means different people: the roster, the plan and
+      // tonight's results do not carry across
+      if ((S.srcKey || "") !== url) { forgetPeople(); S.srcKey = url; }
+      LOG = fresh;
+      SOURCE = "live";
+      CHARTABLE = chartable();
+      S.shown = S.shown.filter((p) => CHARTABLE.includes(p));
+      clearWpCache();
+      save();
+      render();
+      say(`${fresh.length} games, through ${lastDate()}.`, true);
+      if (quiet && grew > 0) {
+        toast(`Sheet updated \u2014 ${grew} new game${grew === 1 ? "" : "s"}`);
+      }
+      return true;
+    })
+    .catch((e) => {
+      say(fetchFailure(url, e), false);
+      return false;
+    });
+}
+
+/** On load: whatever the link, the saved setting or the build points at. */
+function refresh() {
+  const url = sourceUrl();
+  if (!url) { renderSource(); return; }
+  loadSource(url, true).then(renderSource);
+}
+
+restore();
+if (linkSource() && linkSource() !== S.sourceUrl) {
+  S.sourceUrl = linkSource();          // the link wins, and is remembered
+  S.sourceOpen = false;
+}
+if (!S.here.length && LOG.length) {
+  // open on a plausible night: the regulars of the most recent sessions
+  const recent = LOG.slice(-40), c = {};
+  recent.forEach((g) => playersOf(g).forEach((p) => { c[p] = (c[p] || 0) + 1; }));
+  S.here = Object.keys(c).sort((x, y) => c[y] - c[x]).slice(0, 6);
+}
+wire();
+render();
+refresh();
+
+</script>
+
+</body>
+</html>
