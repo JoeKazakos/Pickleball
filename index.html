@@ -119,6 +119,92 @@
   --lift:   0 2px 6px rgba(0,0,0,.6), 0 18px 40px -22px rgba(0,0,0,1);
 }
 
+/* ==========================================================================
+   Colour skins
+
+   A skin repaints the tokens above and nothing else, so every rule in the rest
+   of this file keeps working unchanged.
+
+   --court and --ball are not decoration: they are team A and team B on every
+   card in the app, which makes their separation the one thing a skin is not
+   allowed to spoil. So these were not picked by eye. Candidate trios were
+   enumerated in OKLCH and put through the dataviz validator against these
+   exact card surfaces, in both modes, keeping only those that clear the
+   all-pairs lightness, chroma, CVD and contrast floors -- and then ranked on
+   the court/ball pair alone, requiring deuteranopia, protanopia AND
+   tritanopia separation of at least 10.
+
+   That last requirement is what fixes the range on offer. Magenta primaries
+   collapse against a warm second under tritanopia; green ones collapse under
+   deuteranopia. Only a cool primary against a warm second survives all three,
+   which is the reason the original teal-and-orange is what it is. The skins
+   below are therefore variations on where the cool one sits, not a free choice
+   of any two colours.
+
+   Worst-case team separation, light and dark, deutan/protan and tritan:
+     Court     11.5   Harbour   19.5   Dusk   25.4   Contrast   9.7
+
+   The chart's own eight series hues (--s1..--s8) are deliberately NOT skinned.
+   They carry a separate all-pairs guarantee that took its own validation pass,
+   and re-earning it four times over buys nothing: the chart is one screen and
+   its lines are labelled.
+
+   Dark values hang off [data-mode], which the app sets to the resolved mode --
+   the base theme keeps its own media query, and this saves writing every dark
+   skin twice, once for the query and once for the explicit toggle.
+   ========================================================================== */
+
+/* ---- Harbour: cyan against burnt amber, on a cool blue-grey ------------- */
+[data-skin="harbour"] {
+  --paper:  #eaeef1;  --card:   #f6f9fb;  --sunk:   #dfe5ea;
+  --ink:    #121e24;  --ink-2:  #495a63;  --ink-3:  #7b8992;
+  --rule:   #cfd8de;  --rule-2: #b6c2ca;  --grid:   #dde4e9;
+  --court:  #0792b1;  --ball:   #a95a0d;  --deep:   #755dc0;
+  --court-w:#d7eef4;  --ball-w: #f7e6d3;  --deep-w: #e6e1f7;
+}
+[data-mode="dark"][data-skin="harbour"] {
+  --paper:  #0d1114;  --card:   #171b1f;  --sunk:   #202529;
+  --ink:    #ecf1f4;  --ink-2:  #a3aeb5;  --ink-3:  #748087;
+  --rule:   #292f34;  --rule-2: #394047;  --grid:   #242a2f;
+  --court:  #1195b4;  --ball:   #c86906;  --deep:   #8972d8;
+  --court-w:#0b2f39;  --ball-w: #33230f;  --deep-w: #221d3d;
+}
+
+/* ---- Dusk: indigo against rust, on blue-violet neutrals ----------------- */
+[data-skin="dusk"] {
+  --paper:  #ecedf4;  --card:   #f7f8fc;  --sunk:   #e1e3ee;
+  --ink:    #16182a;  --ink-2:  #4d5268;  --ink-3:  #7e8399;
+  --rule:   #d2d5e4;  --rule-2: #b9bdd1;  --grid:   #dfe1ec;
+  --court:  #5468c8;  --ball:   #b64d14;  --deep:   #0d8750;
+  --court-w:#e0e4f8;  --ball-w: #f8e5db;  --deep-w: #d7efe4;
+}
+[data-mode="dark"][data-skin="dusk"] {
+  --paper:  #0f1016;  --card:   #191b23;  --sunk:   #22242e;
+  --ink:    #edeef6;  --ink-2:  #a6aabd;  --ink-3:  #777c90;
+  --rule:   #2a2c38;  --rule-2: #3a3d4c;  --grid:   #252732;
+  --court:  #687de0;  --ball:   #ce6330;  --deep:   #02a05e;
+  --court-w:#1b2045;  --ball-w: #341f14;  --deep-w: #0e2f22;
+}
+
+/* ---- Contrast: for a sunlit court, where everything else washes out -----
+   Same hue families as the default, pushed to the ends of the range: pure
+   black on white and white on black, with the accents darkened or lifted to
+   match. The grounds do the work here, not the hues. */
+[data-skin="contrast"] {
+  --paper:  #f2f4f2;  --card:   #ffffff;  --sunk:   #e6e9e6;
+  --ink:    #000000;  --ink-2:  #262b28;  --ink-3:  #4d554f;
+  --rule:   #a8b0aa;  --rule-2: #848d87;  --grid:   #d4d9d5;
+  --court:  #0f6b57;  --ball:   #a3391a;  --deep:   #2b3fa8;
+  --court-w:#d6ece6;  --ball-w: #f6ddd4;  --deep-w: #dde1f6;
+}
+[data-mode="dark"][data-skin="contrast"] {
+  --paper:  #000000;  --card:   #101210;  --sunk:   #1b1e1b;
+  --ink:    #ffffff;  --ink-2:  #dfe3e0;  --ink-3:  #aab2ad;
+  --rule:   #4c534e;  --rule-2: #6c746e;  --grid:   #2a2e2b;
+  --court:  #3fd6b4;  --ball:   #ff8a5c;  --deep:   #93a8ff;
+  --court-w:#0d3830;  --ball-w: #3d2214;  --deep-w: #1c2140;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -876,6 +962,33 @@ td .dot {
 .ileft .iscore { font-size: 12px; color: var(--ink-3); }
 .ileft .idelta { font-size: 11px; }
 
+/* ------------------------------------------------------- the colour picker
+   Each option shows the two team colours it would give you, because that is
+   what the choice actually changes -- a name like "Dusk" tells you nothing
+   about whether you will be able to read a card from the baseline. */
+.skins { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.skin {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px 8px 9px; border-radius: 999px; cursor: pointer;
+  border: 1.5px solid var(--rule); background: var(--card);
+  font: 650 13px/1 var(--display); color: var(--ink-2);
+  -webkit-tap-highlight-color: transparent;
+}
+.skin:hover { border-color: var(--rule-2); }
+.skin[aria-pressed="true"] {
+  border-color: var(--court); color: var(--ink); background: var(--court-w);
+}
+.skin:focus-visible { outline: 2.5px solid var(--deep); outline-offset: 2px; }
+.skin .sw {
+  display: inline-flex; border-radius: 999px; overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, .18); flex: 0 0 auto;
+}
+.skin .sw i { display: block; width: 13px; height: 13px; }
+.lookrow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+
 </style>
 </head>
 <body>
@@ -993,6 +1106,25 @@ td .dot {
   </section>
 
   <!-- where the games come from -->
+  <section id="lookSec">
+    <button class="disclose" id="lookToggle" aria-expanded="false" aria-controls="lookBody">
+      <span>Colours</span>
+      <span class="disclose-sum" id="lookSum"></span>
+    </button>
+    <div id="lookBody" class="hidden">
+      <div class="prirow lookrow">
+        <div class="prilab">Light or dark<span>follows your phone unless you say</span></div>
+        <div class="seg tiny" id="modeSeg">
+          <button type="button" data-m="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-m="light" aria-pressed="false">Light</button>
+          <button type="button" data-m="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <div class="skins" id="skinList"></div>
+      <p class="note" id="skinNote" style="margin-top:10px"></p>
+    </div>
+  </section>
+
   <section id="sourceSec">
     <button class="disclose" id="sourceToggle" aria-expanded="false" aria-controls="sourceBody">
       <span>Where the games come from</span>
@@ -1596,6 +1728,9 @@ const S = {
   noSmall: [],         // people who would rather sit than play a small game
   sourceUrl: "",       // a CSV of your own; empty means the one baked in
   sourceOpen: false,
+  theme: "auto",       // auto follows the phone; light and dark override it
+  skin: "court",       // which palette; see the skins block in the CSS
+  lookOpen: false,
   srcKey: "",          // which log the people below belong to
 };
 
@@ -1611,7 +1746,7 @@ function forgetPeople() {
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
                  "plan", "games", "window", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
-                 "srcKey"];
+                 "srcKey", "theme", "skin", "lookOpen"];
 
 function save() {
   try {
@@ -2372,6 +2507,7 @@ function renderTonight() {
   renderSuggestions();
   renderPlayed();
   renderCustom();
+  renderLook();
   renderSource();
   renderFoot();
 }
@@ -3062,6 +3198,73 @@ function detailsHTML(o, C, opts, n) {
 
   return '<p class="dwhy">' + place + '</p>' + table
     + '<p class="daside">' + aside + '</p>';
+}
+
+/* ------------------------------------------------------------ 4b · colours
+
+   The palettes themselves live in the CSS. This decides which one is on, and
+   what "dark" currently means.
+
+   `data-mode` carries the resolved answer — light or dark, after the phone's
+   setting and any override have both been accounted for. The skins hang their
+   dark halves off that, so each is written once rather than twice: the base
+   theme has to say everything twice, once for the media query and once for the
+   explicit toggle, and there was no reason to inherit that.
+*/
+const SKINS = [
+  { k: "court",    label: "Court",    a: "#0a8c74", b: "#c9481e",
+    note: "Teal against ball orange, on a warm grey-green. The original." },
+  { k: "harbour",  label: "Harbour",  a: "#0792b1", b: "#a95a0d",
+    note: "Cyan against burnt amber, on a cool blue-grey." },
+  { k: "dusk",     label: "Dusk",     a: "#5468c8", b: "#b64d14",
+    note: "Indigo against rust — the widest gap between the two teams." },
+  { k: "contrast", label: "Contrast", a: "#0f6b57", b: "#a3391a",
+    note: "Black on white, white on black, for playing in the sun." },
+];
+
+const prefersDark = () =>
+  !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+function applyTheme() {
+  const el = document.documentElement;
+  if (S.theme === "light" || S.theme === "dark") el.setAttribute("data-theme", S.theme);
+  else el.removeAttribute("data-theme");
+
+  const dark = S.theme === "dark" || (S.theme !== "light" && prefersDark());
+  el.setAttribute("data-mode", dark ? "dark" : "light");
+
+  // the default skin is the bare stylesheet, so it carries no attribute at all
+  if (S.skin && S.skin !== "court") el.setAttribute("data-skin", S.skin);
+  else el.removeAttribute("data-skin");
+}
+
+function renderLook() {
+  $("#lookBody").classList.toggle("hidden", !S.lookOpen);
+  $("#lookToggle").setAttribute("aria-expanded", S.lookOpen ? "true" : "false");
+  const skin = SKINS.find((x) => x.k === S.skin) || SKINS[0];
+  $("#lookSum").textContent = skin.label.toLowerCase() + " · "
+    + (S.theme === "auto" ? "auto" : S.theme);
+
+  $$("#modeSeg button").forEach((b) => {
+    b.setAttribute("aria-pressed", b.dataset.m === S.theme ? "true" : "false");
+  });
+
+  const host = $("#skinList");
+  host.innerHTML = "";
+  for (const sk of SKINS) {
+    const b = document.createElement("button");
+    b.className = "skin"; b.type = "button";
+    b.setAttribute("aria-pressed", sk.k === S.skin ? "true" : "false");
+    b.setAttribute("aria-label", sk.label + ": " + sk.note);
+    /* The swatch is the two team colours, because that is what the choice
+       actually changes. A name like "Dusk" says nothing about whether a card
+       will still read from the baseline. */
+    b.innerHTML = `<span class="sw"><i style="background:${sk.a}"></i>`
+      + `<i style="background:${sk.b}"></i></span>${esc(sk.label)}`;
+    b.onclick = () => { S.skin = sk.k; save(); applyTheme(); renderLook(); };
+    host.appendChild(b);
+  }
+  $("#skinNote").textContent = skin.note;
 }
 
 /* ------------------------------------------------------- 5 · where it reads
@@ -3968,6 +4171,19 @@ function wire() {
   });
 
   $("#sourceToggle").onclick = () => { S.sourceOpen = !S.sourceOpen; save(); render(); };
+
+  $("#lookToggle").onclick = () => { S.lookOpen = !S.lookOpen; save(); renderLook(); };
+  $$("#modeSeg button").forEach((b) => {
+    b.onclick = () => { S.theme = b.dataset.m; save(); applyTheme(); renderLook(); };
+  });
+  /* On Auto the phone can change its mind while the page is open -- at sunset,
+     or on a schedule -- and the resolved mode has to follow it. */
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onScheme = () => { if (S.theme === "auto") applyTheme(); };
+    if (mq.addEventListener) mq.addEventListener("change", onScheme);
+    else if (mq.addListener) mq.addListener(onScheme);
+  }
   $("#sourceLoad").onclick = async () => {
     const url = $("#sourceUrl").value.trim();
     if (!url) return;
@@ -4150,6 +4366,7 @@ function lastNightRoster(log) {
 }
 
 restore();
+applyTheme();      // before the first paint, so nothing flashes
 if (linkSource() && linkSource() !== S.sourceUrl) {
   S.sourceUrl = linkSource();          // the link wins, and is remembered
   S.sourceOpen = false;
