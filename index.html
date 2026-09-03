@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Court Caller</title>
+<title>Paddle Up</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%2312211c%22%2F%3E%3Cg%20transform%3D%22rotate%28-24%2015%2017%29%22%3E%3Cellipse%20cx%3D%2215%22%20cy%3D%2214%22%20rx%3D%227.6%22%20ry%3D%228.6%22%20fill%3D%22%2317a489%22%2F%3E%3Crect%20x%3D%2212.6%22%20y%3D%2221.5%22%20width%3D%224.8%22%20height%3D%228.5%22%20rx%3D%222.4%22%20fill%3D%22%2317a489%22%2F%3E%3C%2Fg%3E%3Ccircle%20cx%3D%2224.5%22%20cy%3D%228%22%20r%3D%224.6%22%20fill%3D%22%23de5a2b%22%2F%3E%3Ccircle%20cx%3D%2224.5%22%20cy%3D%226.2%22%20r%3D%220.85%22%20fill%3D%22%2312211c%22%2F%3E%3Ccircle%20cx%3D%2226.3%22%20cy%3D%228.6%22%20r%3D%220.85%22%20fill%3D%22%2312211c%22%2F%3E%3Ccircle%20cx%3D%2222.8%22%20cy%3D%229.2%22%20r%3D%220.85%22%20fill%3D%22%2312211c%22%2F%3E%3C%2Fsvg%3E">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Courtside team-picking and running ratings for a Tuesday-night pickleball group.">
+<meta name="description" content="Courtside team-picking and running ratings for a pickleball group.">
 <meta name="theme-color" content="#eceee8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1210" media="(prefers-color-scheme: dark)">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -819,12 +820,24 @@ td .dot {
 .note.bad  { color: var(--crit); }
 #shareOut .csvbox { white-space: pre-wrap; word-break: break-all; }
 
+/* the game that dropped off the back of the window, under the one that arrived */
+.ileft {
+  margin-top: 7px; padding-top: 6px; border-top: 1px dashed var(--rule-2);
+  opacity: .85;
+}
+.ileft .idate {
+  font-weight: 700; color: var(--ball); letter-spacing: .06em; text-transform: uppercase;
+}
+.ileft .iteams { font-weight: 600; font-size: 12.5px; color: var(--ink-2); }
+.ileft .iscore { font-size: 12px; color: var(--ink-3); }
+.ileft .idelta { font-size: 11px; }
+
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-in">
-    <p class="mark">COURT <span>CALLER</span></p>
+    <p class="mark">PADDLE <span>UP</span></p>
     <div class="top-meta" id="topMeta"></div>
   </div>
   <nav class="tabs" id="tabs">
@@ -893,7 +906,6 @@ td .dot {
         <div class="seg tiny" id="courtSeg">
           <button type="button" data-c="1" aria-pressed="true">1</button>
           <button type="button" data-c="2" aria-pressed="false">2</button>
-          <button type="button" data-c="3" aria-pressed="false">3</button>
         </div>
       </div>
       <div class="btn-row" style="margin-top:14px">
@@ -921,14 +933,6 @@ td .dot {
   <section id="playedSec" class="hidden">
     <h2 id="playedHead">Played tonight</h2>
     <div class="log" id="log"></div>
-    <div class="scroll-x" style="margin-top:16px">
-      <table class="tally">
-        <thead>
-          <tr><th>Player</th><th>W</th><th>L</th><th>Pts&nbsp;+/&minus;</th><th>Sat</th><th>Queued</th></tr>
-        </thead>
-        <tbody id="tallyBody"></tbody>
-      </table>
-    </div>
     <div class="btn-row" style="margin-top:14px">
       <button class="btn small ghost" id="btnCsv">Copy tonight as CSV</button>
       <button class="btn small ghost" id="btnReset">End night</button>
@@ -1028,10 +1032,12 @@ td .dot {
 
       <div class="ratingside">
         <h2 id="impactHead">Game by game</h2>
-        <p class="note" style="margin-bottom:10px">What adding each game did to
-        the rating of the players in it, holding the rest of the window fixed
-        &mdash; so a winner never shows a fall because an old game dropped off the
-        back. It adds up to zero. Hover the chart and the matching game lights up.</p>
+        <p class="note" style="margin-bottom:10px">Every step on the line has two
+        causes, and both are listed. The top row is what <b>adding</b> that game did.
+        The <b>out</b> row is the game that fell off the back of the window at the
+        same moment &mdash; which is how someone who did not play can still move.
+        The two add up to the step exactly. Hover the chart and the matching game
+        lights up.</p>
         <div class="impact" id="impact"></div>
       </div>
     </div>
@@ -1511,7 +1517,7 @@ function pFromMargin(m, target) {
 
 const PRIORITIES = [
   { k: "partnerNight", label: "New partners", hint: "tonight" },
-  { k: "partnerAll",   label: "New partners", hint: "all time" },
+  { k: "matchAll",     label: "New games",    hint: "never played before" },
 ];
 
 /* Starting points, not settings -- the sliders are the real control. The
@@ -1519,20 +1525,21 @@ const PRIORITIES = [
  * does: the Almanac measures their real nights at 0.320 mean imbalance with
  * 14.3 distinct partnerships. */
 const PRESETS = {
-  balanced: { partnerNight: 1, partnerAll: 0, minQ: 75 },
-  social:   { partnerNight: 2, partnerAll: 1, minQ: 50 },
-  fresh:    { partnerNight: 2, partnerAll: 3, minQ: 0 },
+  balanced: { partnerNight: 1, matchAll: 0, minQ: 85 },
+  social:   { partnerNight: 2, matchAll: 1, minQ: 85 },
+  fresh:    { partnerNight: 2, matchAll: 3, minQ: 50 },
 };
 
 const S = {
   tab: "tonight",
   here: [],
   target: 11,        // this group plays to 11, always
-  courts: 1,
+  courts: 1,           // one or two; a third has never been needed
   w: { ...PRESETS.social },
-  minQ: 50,            // the floor: no suggestion below this game quality
+  minQ: 85,            // the floor: no suggestion below this game quality
   prefsOpen: false,
-  rosterOpen: null,    // null = open until the night starts, then collapsed
+  rosterOpen: false,   // starts folded away: the last night's players are
+                       // already ticked, so there is usually nothing to do
   discarded: [],       // suggestion keys turned down for the current pick
   plan: [],            // upcoming games: {id, round, court, a, b, sit, sa, sb}
   games: [],           // played tonight: {a, b, sa, sb, sit}
@@ -1626,9 +1633,11 @@ function roundSize() {
  * floor(n/4) disabled the very button that turns that on. Six people could not
  * select two courts; eleven could not select three.
  */
+const MAX_COURTS = 2;      // this group has never filled a third
+
 function usableCourts(n) {
   const doubles = Math.floor(n / 4);
-  return Math.max(1, doubles + (n - 4 * doubles >= 2 ? 1 : 0));
+  return Math.min(MAX_COURTS, Math.max(1, doubles + (n - 4 * doubles >= 2 ? 1 : 0)));
 }
 
 /** Courts actually in use: the doubles games, plus the spare if it is filled. */
@@ -1640,7 +1649,7 @@ function courtsInUse() {
 
 /** Pair and opponent counts over a set of games, plus the even-share divisor. */
 function tally(games, roster) {
-  const partner = {};
+  const partner = {}, match = {};
   let n = 0;
   for (const g of games) {
     if (g.a.length !== 2 || g.b.length !== 2) continue;   // no partnerships to count
@@ -1649,12 +1658,16 @@ function tally(games, roster) {
     n++;
     partner[teamKey(g.a)] = (partner[teamKey(g.a)] || 0) + 1;
     partner[teamKey(g.b)] = (partner[teamKey(g.b)] || 0) + 1;
+    // the whole matchup, both pairs together -- how many of these have never
+    // happened is the question "new games" is asking
+    const mk = matchKey(g.a, g.b);
+    match[mk] = (match[mk] || 0) + 1;
   }
   const nPairs = Math.max(1, roster.length * (roster.length - 1) / 2);
   // Each game spends two partnerships; an even spread would give every pair
   // this many. Dividing by it makes "twice your share" mean the same thing
   // tonight as it does over ten months.
-  return { partner, pShare: Math.max(0.5, 2 * n / nPairs), n };
+  return { partner, match, pShare: Math.max(0.5, 2 * n / nPairs), n };
 }
 
 /* Repetition penalties.
@@ -1671,6 +1684,26 @@ function tally(games, roster) {
  * opposing pairs and only two partnerships. */
 const REF_P = 2;
 const QUALITY_TIE = 0.8;
+
+/* Playing the very same four, split the same way, twice in one night is the
+ * one thing this group demonstrably avoids -- and the Almanac measures it as
+ * nearly free to honour. So it is a fixed weight rather than a slider: turning
+ * "new games" off asks for repeats across the whole log, not for the same
+ * match twice in an evening. Not a hard filter, because with four or five
+ * present the repeats are forced arithmetically. */
+const NIGHT_REPEAT_W = 3.0;
+
+/* How far below the floor a game falls.
+ *
+ * A floor is a target, not a switch, and with this group it is often out of
+ * reach: at 85, fewer than one round in ten can be filled without breaking it,
+ * because who is allowed on court is already fixed by the court-time rotation.
+ * Ranking sub-floor games only by novelty made that worse than it had to be --
+ * mean quality fell to 10 with five present, because a dreadful split that
+ * avoided a repeat outranked a decent one that did not. Missing by five is not
+ * the same as missing by fifty, and the cost now says so. */
+const FLOOR_MISS_W = 6.0, FLOOR_MISS_W2 = 8.0;   // linear, plus convex
+// so that missing by fifty hurts far more than five times missing by ten
 
 /* The floor's notches.
  *
@@ -1813,8 +1846,18 @@ function gameCostRaw(a, b, C) {
 
   const pn = (penNight(C.night.partner, teamKey(a), REF_P)
             + penNight(C.night.partner, teamKey(b), REF_P)) / 2;
-  const pa = (penAll(C.all.partner, teamKey(a), C.all.pShare)
-            + penAll(C.all.partner, teamKey(b), C.all.pShare)) / 2;
+  /* Has this exact four, split this way, ever happened?
+   *
+   * Bounded, not squared. All-time counts run to a dozen where tonight's run
+   * to three, so the (count/2)^2 shape borrowed from the nightly terms scored
+   * a well-worn matchup at 36 and drowned out everything else -- it was
+   * ranking a quality-3 game above a quality-76 one. What the question
+   * actually asks is "has this happened", so the answer saturates: 0 if never,
+   * 0.5 once, and approaching 2 however often. */
+  const seenEver = C.all.match[matchKey(a, b)] || 0;
+  const ma = 2 * seenEver / (seenEver + 3);
+  const seenTonight = C.night.match[matchKey(a, b)] || 0;
+  const shortfall = Math.max(0, S.minQ - qualityOf({ a, b })) / 100;
 
   /* Closeness is a floor now, not a weight -- suggestions below the chosen
    * game quality are not offered at all. What is left here is a light
@@ -1822,7 +1865,10 @@ function gameCostRaw(a, b, C) {
    * comes first; without it the planner would happily rank a game that just
    * scrapes the floor above one far better. */
   const W = S.w;
-  return QUALITY_TIE * comp + W.partnerNight * pn + W.partnerAll * pa;
+  return QUALITY_TIE * comp
+       + FLOOR_MISS_W * shortfall + FLOOR_MISS_W2 * shortfall * shortfall
+       + W.partnerNight * pn + (W.matchAll || 0) * ma
+       + NIGHT_REPEAT_W * seenTonight * seenTonight;
 }
 
 /* A leftover group of two or three, with a court free, plays rather than
@@ -2279,8 +2325,7 @@ function renderTonight() {
 /** Open until there is something on court, then collapsed -- unless the reader
  *  has said otherwise, in which case that sticks. */
 function rosterOpen() {
-  if (S.rosterOpen !== null) return S.rosterOpen;
-  return !(S.plan.length || S.games.length);
+  return !!S.rosterOpen;
 }
 
 /* Who appears as a chip.
@@ -2575,6 +2620,7 @@ function gameTags(g, C) {
   const tags = [];
   if (!C.night.partner[teamKey(g.a)] && !C.night.partner[teamKey(g.b)])
     tags.push(["hot", "both pairs new tonight"]);
+  if (!C.all.match[matchKey(g.a, g.b)]) tags.push(["hot", "never played before"]);
   const aAll = C.all.partner[teamKey(g.a)] || 0, bAll = C.all.partner[teamKey(g.b)] || 0;
   if (!aAll || !bAll)
     tags.push(["hot", aAll || bAll ? "a pairing never played" : "neither pair has played"]);
@@ -2791,6 +2837,11 @@ function detailsHTML(o, C) {
     rows.push(["Never partnered before", `${freshEver} of ${pairs}`,
       freshEver ? "first time" : ""]);
   }
+  const unplayed = doubles.filter((g) => !C.all.match[matchKey(g.a, g.b)]).length;
+  if (doubles.length) {
+    rows.push(["Matchup never played", `${unplayed} of ${doubles.length}`,
+      unplayed === doubles.length ? "all new" : ""]);
+  }
 
   const sitting = o.rounds[0].sit;
   rows.push(["Sitting", sitting.length ? sitting.join(", ") : "nobody",
@@ -2844,8 +2895,24 @@ function renderSource() {
 
    Games happen that nobody queued -- a fifth turns up, two courts swap, someone
    calls a rematch. This logs one directly, on the same footing as a planned
-   game: it lands in tonight's results, the standings, the ratings and the CSV.
+   game: it lands in tonight's results, the ratings and the CSV, and it counts
+   towards what gets suggested next. Quality here is the same number the
+   suggestions carry, so a game entered by hand reads the same way.
 */
+/** How good the game you are typing in was, on the same scale the suggestions
+ *  use. Needs the ratings, so it only appears once four players are chosen. */
+function customQualityHTML(c) {
+  if (!CTX) context();
+  const a = [c.p[0], c.p[1]], b = [c.p[2], c.p[3]];
+  const q = qualityOf({ a, b });
+  const band = q >= 80 ? "hi" : q >= 55 ? "mid" : "lo";
+  return `<div class="slateq" style="border-top:0;padding-top:0;margin-top:12px">
+      <span class="qlab">Game quality</span>
+      <span class="qmeter"><i class="${band}" style="width:${Math.max(2, q)}%"></i></span>
+      <span class="qnum ${band}">${q}</span>
+    </div>`;
+}
+
 function renderCustom() {
   const host = $("#custom");
   const known = rosterOf(allGames());
@@ -2875,6 +2942,7 @@ function renderCustom() {
       <input class="cscore" inputmode="numeric" maxlength="2" data-s="sb"
              value="${esc(c.sb)}" placeholder="0" aria-label="Score for the second team">
     </div>
+    ${full ? customQualityHTML(c) : ""}
     <p class="note cnote">${
       dupes ? "Someone is on both teams."
       : !full ? "Pick four players."
@@ -2887,9 +2955,18 @@ function renderCustom() {
   add.textContent = "Add to tonight";
   add.disabled = !(full && scored);
   add.onclick = () => {
-    S.games.push({ a: [c.p[0], c.p[1]], b: [c.p[2], c.p[3]], sa, sb });
+    /* Read the score now, not at render time. Typing updates the state without
+     * a redraw so the caret survives, which left this closure holding whatever
+     * the field said when the section was last drawn -- NaN, on a fresh night,
+     * so the game went into the log with no score at all. */
+    const now = S.custom;
+    const nsa = parseInt(now.sa, 10), nsb = parseInt(now.sb, 10);
+    const ok4 = now.p.filter(Boolean).length === 4
+      && new Set(now.p.filter(Boolean)).size === 4;
+    if (!ok4 || isNaN(nsa) || isNaN(nsb) || nsa === nsb) return;
+    S.games.push({ a: [now.p[0], now.p[1]], b: [now.p[2], now.p[3]], sa: nsa, sb: nsb });
     // anyone logged this way is plainly here, so the roster follows
-    c.p.forEach((p) => { if (!S.here.includes(p)) S.here.push(p); });
+    now.p.forEach((p) => { if (!S.here.includes(p)) S.here.push(p); });
     S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
     S.discarded = [];
     save(); render();
@@ -2943,48 +3020,6 @@ function renderPlayed() {
     row.appendChild(x);
     host.appendChild(row);
   });
-  renderTally();
-}
-
-function restStreaks() {
-  const r = Object.fromEntries(S.here.map((p) => [p, 0]));
-  const done = new Set();
-  for (let i = S.games.length - 1; i >= 0 && done.size < S.here.length; i--) {
-    const on = new Set(playersOf(S.games[i]));
-    for (const p of S.here) {
-      if (done.has(p)) continue;
-      if (on.has(p)) done.add(p); else r[p]++;
-    }
-  }
-  return r;
-}
-
-function renderTally() {
-  const rest = restStreaks();
-  const planned = Object.fromEntries(S.here.map((p) => [p, 0]));
-  S.plan.forEach((g) => playersOf(g).forEach((p) => {
-    if (p in planned) planned[p]++;
-  }));
-  const rows = S.here.map((p) => {
-    let w = 0, l = 0, pf = 0, pa = 0, sat = 0;
-    for (const g of S.games) {
-      const sides = sidesOf(g), sc = scoresOf(g);
-      const n = sides.findIndex((t) => t.includes(p));
-      if (n < 0) { sat++; continue; }
-      const mine = sc[n];
-      // in a three-way, "against" is whoever else did best
-      const theirs = Math.max(...sc.filter((_, i) => i !== n));
-      pf += mine; pa += theirs;
-      if (mine > theirs) w++; else l++;
-    }
-    return { p, w, l, d: pf - pa, sat, rest: rest[p], up: planned[p] };
-  });
-  rows.sort((x, y) => (y.w - y.l) - (x.w - x.l) || y.d - x.d);
-  $("#tallyBody").innerHTML = rows.map((r) => `
-    <tr><td>${esc(r.p)}</td><td>${r.w}</td><td class="dim">${r.l}</td>
-    <td class="${r.d > 0 ? "pos" : r.d < 0 ? "neg" : "dim"}">${r.d > 0 ? "+" : ""}${r.d}</td>
-    <td class="dim">${r.sat}</td>
-    <td class="${r.up ? "" : "dim"}">${r.up || "–"}</td></tr>`).join("");
 }
 
 /* ---- colour, and why the chart changes shape --------------------------
@@ -2993,7 +3028,7 @@ function renderTally() {
  * only the first three -- blue, orange, aqua -- clear the all-pairs floors in
  * both light and dark; a search over every four- and five-hue subset of the
  * eight found none that passes in both. That is a real limit, not a nuisance:
- * at four lines two of them genuinely are hard to tell apart, and the failing
+ * at four lines two of them genuinely are hard to tell apart, and the
  * failing pair -- a magenta against a red, dE 13.2 -- was on screen.
  *
  * So the form follows the count instead of the palette being stretched. Up to
@@ -3154,20 +3189,44 @@ function renderImpact(series, roster, games) {
 
     const before = ridge(games.slice(from, idx), roster);
     const after = ridge(games.slice(from, idx + 1), roster);
-    const raw = roster.map((p, i) => after.beta[i] - before.beta[i]);
     const rated = roster
       .map((p, i) => i)
       .filter((i) => before.games[i] >= MIN_IN_WINDOW && after.games[i] >= MIN_IN_WINDOW);
-    const mu = rated.length
-      ? rated.reduce((t, i) => t + raw[i], 0) / rated.length : 0;
+    const centreOn = (vec) => {
+      const mu = rated.length ? rated.reduce((t, i) => t + vec[i], 0) / rated.length : 0;
+      return vec.map((v) => v - mu);
+    };
 
+    const add = centreOn(roster.map((p, i) => after.beta[i] - before.beta[i]));
     const deltas = playersOf(g).map((p) => {
       const i = roster.indexOf(p);
       if (i < 0 || after.games[i] < MIN_IN_WINDOW) return null;
-      return { p, d: raw[i] - mu };
+      return { p, d: add[i] };
     }).filter(Boolean).sort((x, y) => y.d - x.d);
 
-    rows.push({ i: idx, date: g.date, g, deltas });
+    /* The other half of the step.
+     *
+     * The line moves for two reasons at once: this game arrives, and the game
+     * w back falls off the end. That second half is why somebody who did not
+     * play can still rise, which is baffling unless it is shown. It costs no
+     * extra work: the previous fitted point is the same window one game
+     * earlier, so `before` minus that point is exactly what leaving did.
+     */
+    let leaver = null;
+    const prev = series[n - 1];
+    if (w && prev && from > 0) {
+      const gone = games[from - 1];
+      const dropRaw = roster.map((p, i) => before.beta[i] - prev.beta[i]);
+      const drop = centreOn(dropRaw);
+      const dd = gone ? playersOf(gone).map((p) => {
+        const i = roster.indexOf(p);
+        if (i < 0 || prev.games[i] < MIN_IN_WINDOW) return null;
+        return { p, d: drop[i] };
+      }).filter(Boolean).sort((x, y) => y.d - x.d) : [];
+      if (gone && dd.length) leaver = { g: gone, date: gone.date, deltas: dd };
+    }
+
+    rows.push({ i: idx, date: g.date, g, deltas, leaver });
   }
 
   const total = series.length;
@@ -3187,6 +3246,17 @@ function renderImpact(series, roster, games) {
         ? r.deltas.map((d) => `<span class="idelta ${d.d >= 0 ? "up" : "down"}">` +
             `${esc(d.p)} <b>${signed(d.d, 2)}</b></span>`).join("")
         : `<span class="idelta dim">not enough games in the window yet</span>`}</div>
+      ${r.leaver ? `<div class="ileft">
+        <div class="ihead">
+          <span class="idate">out</span>
+          <span class="iteams">${sidesOf(r.leaver.g).map((t) => esc(t.join(" & ")))
+            .join('<i> v </i>')}<i> &middot; ${esc(r.leaver.date)}</i></span>
+          <span class="iscore">${scoresOf(r.leaver.g).join("\u2013")}</span>
+        </div>
+        <div class="ideltas">${r.leaver.deltas.map((d) =>
+          `<span class="idelta ${d.d >= 0 ? "up" : "down"}">${esc(d.p)} ` +
+          `<b>${signed(d.d, 2)}</b></span>`).join("")}</div>
+      </div>` : ""}
     </div>`).join("");
 }
 
@@ -3489,7 +3559,7 @@ function renderFoot() {
     <p><b>Game quality</b> is 100 for a coin flip and falls as the expected
     margin grows: that margin is pushed through the exact mathematics of a race
     to ${S.target}, win by 2, and the resulting win probability is turned back
-    into a single number. Which side is favoured is deliberately not shown.</p>
+    into a single number.</p>
     <p>Data: ${LOG.length} games through ${lastDate()} &mdash;
     ${SOURCE === "none" ? "<b>no source set yet</b>" : `the <b>${SOURCE}</b> copy`}.
     Tonight&rsquo;s results count toward the ratings and the novelty counts as
@@ -3601,7 +3671,7 @@ function wire() {
     if (el) el.select();
   });
   planHost.addEventListener("focusout", (e) => {
-    if (e.target.closest(".sscore")) { renderPlan(); renderTally(); }
+    if (e.target.closest(".sscore")) renderPlan();
   });
 
   $("#log").addEventListener("input", (e) => {
@@ -3612,7 +3682,6 @@ function wire() {
     const v = parseInt(el.value.replace(/\D/g, ""), 10);
     g[el.dataset.s] = isNaN(v) ? 0 : Math.min(99, v);
     save();
-    renderTally();          // the standings follow, the row itself can wait
   });
   $("#log").addEventListener("focusin", (e) => {
     const el = e.target.closest(".logscore");
@@ -3784,8 +3853,10 @@ function loadSource(url, quiet) {
       const grew = fresh.length - LOG.length;
       // a different log means different people: the roster, the plan and
       // tonight's results do not carry across
-      if ((S.srcKey || "") !== url) { forgetPeople(); S.srcKey = url; }
+      const changed = (S.srcKey || "") !== url;
+      if (changed) { forgetPeople(); S.srcKey = url; }
       LOG = fresh;
+      if (changed || !S.here.length) S.here = lastNightRoster(LOG);
       SOURCE = "live";
       CHARTABLE = chartable();
       S.shown = S.shown.filter((p) => CHARTABLE.includes(p));
@@ -3811,17 +3882,29 @@ function refresh() {
   loadSource(url, true).then(renderSource);
 }
 
+/**
+ * Who was here last time.
+ *
+ * The people who played on the log's most recent date -- the same night, not a
+ * blend of the last several -- because the same faces usually turn up, and a
+ * roster that is already right needs no tapping at all.
+ */
+function lastNightRoster(log) {
+  if (!log.length) return [];
+  const last = log[log.length - 1].t;
+  const who = new Set();
+  for (let i = log.length - 1; i >= 0 && log[i].t === last; i--) {
+    playersOf(log[i]).forEach((p) => who.add(p));
+  }
+  return Array.from(who).sort();
+}
+
 restore();
 if (linkSource() && linkSource() !== S.sourceUrl) {
   S.sourceUrl = linkSource();          // the link wins, and is remembered
   S.sourceOpen = false;
 }
-if (!S.here.length && LOG.length) {
-  // open on a plausible night: the regulars of the most recent sessions
-  const recent = LOG.slice(-40), c = {};
-  recent.forEach((g) => playersOf(g).forEach((p) => { c[p] = (c[p] || 0) + 1; }));
-  S.here = Object.keys(c).sort((x, y) => c[y] - c[x]).slice(0, 6);
-}
+if (!S.here.length && LOG.length) S.here = lastNightRoster(LOG);
 wire();
 render();
 refresh();

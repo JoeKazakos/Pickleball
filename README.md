@@ -1,4 +1,4 @@
-# Court Caller
+# Paddle Up
 
 Courtside team-picking and running ratings for a pickleball group: who is here,
 what the night should look like, and how everyone's form is moving.
