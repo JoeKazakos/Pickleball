@@ -1604,6 +1604,17 @@ let LOG = parseCsv(BOOT.csv || "");    // may be empty: a build for a public
 const bootSource = () => (!BOOT.csv ? "none" : BOOT.url ? "snapshot" : "sample");
 let SOURCE = bootSource();
 
+/* The sample has no URL of its own -- BOOT.url is "" for it, same as "no
+ * source recorded yet" -- but it is still a specific source whose invented
+ * people must not follow anyone to a real sheet, or the other way around.
+ * This gives it an identity srcKey bookkeeping can actually compare against;
+ * no real address can ever equal it. */
+const SAMPLE_ID = "::sample::";
+/** What is synchronously loaded right now, from BOOT alone -- never a ?csv=
+ *  link, which has not been fetched yet and is not "the current source"
+ *  until it actually loads. */
+const bakedSrcId = () => BOOT.url || (BOOT.csv ? SAMPLE_ID : "");
+
 /** The address in use: the link's ?csv= beats a saved one beats the built-in. */
 function sourceUrl() {
   return linkSource() || S.sourceUrl || BOOT.url || "";
@@ -1871,27 +1882,36 @@ function save() {
  * Everything that names somebody does not.
  */
 function restore() {
+  const baked = bakedSrcId();
   try {
     const v = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (!v || !Array.isArray(v.here)) return;
+    if (!v || !Array.isArray(v.here)) { S.srcKey = baked; return; }
     PERSIST.forEach((k) => { if (v[k] !== undefined) S[k] = v[k]; });
 
-    /* An empty stored key means "not recorded yet", which is not the same as
-     * "a different log". The key is only ever written by a successful fetch,
-     * and this copy is meant to work with no signal at all -- so in a gym it
-     * stayed empty, every save recorded it empty, and the next reload read
-     * that as a mismatch and threw away the roster, the queue and everything
-     * played. One backgrounded tab coming back was enough to lose a night.
+    /* Compared against what is actually, synchronously loaded right now --
+     * the baked-in copy, real snapshot or sample -- never a ?csv= link, which
+     * has not been fetched yet. Comparing against the pending link instead
+     * let restore() "adopt" a source before anything had actually loaded: it
+     * wrote srcKey to match the new link immediately, so when loadSource()'s
+     * own fetch *did* succeed a moment later, srcKey already matched and its
+     * change check silently did nothing -- the log swapped in but the old
+     * source's roster and games did not clear, mixing a real sheet with the
+     * sample's invented names. loadSource() does its own forgetPeople() once
+     * a fetch actually lands; this only has to be right about what is
+     * already on screen.
      *
-     * So only a key that names a *different* source forgets anybody. That
-     * still covers what this was written for: a copy carrying no data of its
-     * own, opened on a phone that had used a real sheet, has a stored key that
-     * does not match and does not bring the other group's names with it. */
-    const willUse = linkSource() || S.sourceUrl || BOOT.url || "";
+     * An empty stored key means "not recorded yet", which is not the same as
+     * "a different log" -- this copy can work with no signal at all, and a
+     * key that only ever gets recorded on success must not read an honest
+     * "nothing yet" as a mismatch and throw away the roster, the queue and
+     * everything played. So only a key naming a genuinely different source
+     * forgets anybody. */
     const had = v.srcKey || "";
-    if (had && had !== willUse) forgetPeople();
-    S.srcKey = willUse;
-  } catch (e) { /* corrupt or unavailable */ }
+    if (had && had !== baked) forgetPeople();
+    S.srcKey = baked;
+  } catch (e) {
+    S.srcKey = baked;
+  }
 }
 
 /* ============================================================= matchmaking */
@@ -4562,7 +4582,11 @@ function wire() {
   };
   $("#sourceReset").onclick = () => {
     S.sourceUrl = "";
-    if ((S.srcKey || "") !== (BOOT.url || "")) { forgetPeople(); S.srcKey = BOOT.url || ""; }
+    // the built-in copy is BOOT.url's real snapshot, or -- for a public
+    // build with none -- the sample; either way it needs its own identity so
+    // the next real source added is not compared against an empty "" again
+    const baked = bakedSrcId();
+    if ((S.srcKey || "") !== baked) { forgetPeople(); S.srcKey = baked; }
     save();
     LOG = parseCsv(BOOT.csv || "");
     SOURCE = bootSource();
