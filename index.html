@@ -4187,8 +4187,8 @@ function matchupRow(pair, rate, games) {
   return { a, b, quality, played: hist.length, wa, wb, last };
 }
 
-/** All rows, most-played first so real history leads; ties on that go to the
- *  closer matchup. Untried ones -- played: 0 -- sort to the bottom. */
+/** All rows, closest matchup first so the best games lead; ties on that go to
+ *  whichever has actually been played more. */
 function matchupRows() {
   const games = allGames();
   const fit = ridge(games, rosterOf(games));
@@ -4196,7 +4196,7 @@ function matchupRows() {
   const eligible = matchupEligible();
   const dbl = games.filter((g) => !isSmall(g));
   const rows = allMatchups(eligible).map((pr) => matchupRow(pr, rate, dbl));
-  rows.sort((x, y) => y.played - x.played || x.quality - y.quality);
+  rows.sort((x, y) => y.quality - x.quality || y.played - x.played);
   return { rows, eligible };
 }
 
