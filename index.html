@@ -1771,7 +1771,8 @@ const S = {
   games: [],           // played tonight: {a, b, sa, sb, sit}
   window: 40,
   shown: [],           // players selected in the chart
-  chartMode: null,     // null = follow the count; else "together" | "separate"
+  chartMode: "separate",  // "together" | "separate"; the default before anyone
+                          // has touched the toggle
   range: null,         // [fromFraction, toFraction] of the fitted series
   custom: { p: ["", "", "", ""], sa: "", sb: "" },   // the unplanned game
   extra: [],           // people typed in who are not in the log yet
@@ -3563,11 +3564,9 @@ function renderRatings() {
     b.setAttribute("aria-pressed", b.dataset.m === chartMode() ? "true" : "false"));
 
   CHARTABLE = chartable();
-  if (!S.shown.length) {
-    const recent = games.slice(-60), c = {};
-    recent.forEach((g) => playersOf(g).forEach((p) => { c[p] = (c[p] || 0) + 1; }));
-    S.shown = CHARTABLE.filter((p) => c[p]).sort((x, y) => c[y] - c[x]).slice(0, 3);
-  }
+  // the default before anyone has picked anyone in particular: everyone
+  // chartable, which is why the default view is faceted rather than overlaid
+  if (!S.shown.length) S.shown = CHARTABLE.slice();
   S.shown = S.shown.filter((p) => CHARTABLE.includes(p));
 
   const total = {};
