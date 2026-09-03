@@ -34,20 +34,40 @@
   --sunk:   #e1e5dd;
   --ink:    #13201c;
   --ink-2:  #4c5a53;
-  --ink-3:  #7d8880;
+  --ink-3:  #5c6861;   /* muted, and 4.5:1 on card, paper and sunk alike */
   --rule:   #d2d8cf;
   --rule-2: #bac3b9;
 
   --court:  #0a8c74;   /* team A, everywhere */
   --ball:   #c9481e;   /* team B, everywhere */
+  /* The accent as a *filled surface*, and the ink that sits on it.
+     A single hardcoded white was painted on --court across every palette,
+     and --court runs from a deep teal to a bright mint depending on the skin
+     and the mode -- white on Contrast's dark mint measured 1.83:1, in the one
+     skin that exists for reading in sunlight. So each palette names its own.
+     The fill is separate from --court because --court is also team A's ink,
+     where a light value is wanted and a dark one is not. */
+  --court-solid: #09846d;
+  --on-court: #ffffff;
+  --on-crit:  #ffffff;
+  /* Accent colours used as *text*.
+     The graphic values above are what the two teams are drawn in, and the
+     colour-blind separation was validated on that pair -- so those do not
+     move. The same tokens were also carrying type, where they measured as
+     low as 2.9:1 against the surface behind them, well under the 4.5:1 this
+     stylesheet holds itself to elsewhere. Darkening them for type only
+     leaves every swatch, meter, line and border exactly as it was. */
+  --court-ink: #0c725f;
+  --ball-ink:  #ae421e;
+  --deep-ink:  #3f55c0;
   --deep:   #3f55c0;   /* neutral readouts */
   --court-w:#d9ece6;
   --ball-w: #f7e2d9;
   --deep-w: #dfe3f7;
 
-  --good:   #0a7d33;
-  --warn:   #9a6a00;
-  --crit:   #c0392f;
+  --good:   #09742f;
+  --warn:   #865c00;
+  --crit:   #b6362d;
 
   --shadow: 0 1px 2px rgba(19,32,28,.07), 0 10px 28px -18px rgba(19,32,28,.35);
   --lift:   0 2px 4px rgba(19,32,28,.10), 0 16px 34px -20px rgba(19,32,28,.45);
@@ -74,10 +94,16 @@
     --sunk:   #22261f;
     --ink:    #eff2ec;
     --ink-2:  #a6b0a9;
-    --ink-3:  #78827b;
+    --ink-3:  #858e87;
     --rule:   #2b2f2a;
     --rule-2: #3b413a;
     --court:  #17a489;
+    --court-solid: #17a489;   /* bright enough to fill; takes dark ink */
+    --on-court: #0b1512;
+    --on-crit:  #1a0a0a;
+    --court-ink: #19a58a;
+    --ball-ink:  #e0693e;
+    --deep-ink:  #7185e8;
     --ball:   #de5a2b;
     --deep:   #6d82e8;
     --court-w:#123029;
@@ -85,7 +111,7 @@
     --deep-w: #1c2145;
     --good:   #2ebb2e;
     --warn:   #d9a11f;
-    --crit:   #e35c5c;
+    --crit:   #e46363;
     --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
     --grid:   #262b25;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
@@ -100,10 +126,16 @@
   --sunk:   #22261f;
   --ink:    #eff2ec;
   --ink-2:  #a6b0a9;
-  --ink-3:  #78827b;
+  --ink-3:  #858e87;
   --rule:   #2b2f2a;
   --rule-2: #3b413a;
   --court:  #17a489;
+  --court-solid: #17a489;
+  --on-court: #0b1512;
+  --on-crit:  #1a0a0a;
+  --court-ink: #19a58a;
+  --ball-ink:  #e0693e;
+  --deep-ink:  #7185e8;
   --ball:   #de5a2b;
   --deep:   #6d82e8;
   --court-w:#123029;
@@ -111,7 +143,7 @@
   --deep-w: #1c2145;
   --good:   #2ebb2e;
   --warn:   #d9a11f;
-  --crit:   #e35c5c;
+  --crit:   #e46363;
   --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 30px -20px rgba(0,0,0,.9);
   --grid:   #262b25;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
@@ -157,32 +189,40 @@
 /* ---- Harbour: cyan against burnt amber, on a cool blue-grey ------------- */
 [data-skin="harbour"] {
   --paper:  #eaeef1;  --card:   #f6f9fb;  --sunk:   #dfe5ea;
-  --ink:    #121e24;  --ink-2:  #495a63;  --ink-3:  #7b8992;
+  --ink:    #121e24;  --ink-2:  #495a63;  --ink-3:  #5a676f;
   --rule:   #cfd8de;  --rule-2: #b6c2ca;  --grid:   #dde4e9;
   --court:  #0792b1;  --ball:   #a95a0d;  --deep:   #755dc0;
+  --court-solid: #067f9a;  --on-court: #ffffff;
+  --court-ink: #0a6e85;  --ball-ink: #985310;  --deep-ink: #6b57b0;
   --court-w:#d7eef4;  --ball-w: #f7e6d3;  --deep-w: #e6e1f7;
 }
 [data-mode="dark"][data-skin="harbour"] {
   --paper:  #0d1114;  --card:   #171b1f;  --sunk:   #202529;
-  --ink:    #ecf1f4;  --ink-2:  #a3aeb5;  --ink-3:  #748087;
+  --ink:    #ecf1f4;  --ink-2:  #a3aeb5;  --ink-3:  #828e94;
   --rule:   #292f34;  --rule-2: #394047;  --grid:   #242a2f;
   --court:  #1195b4;  --ball:   #c86906;  --deep:   #8972d8;
+  --court-solid: #1195b4;  --on-court: #08161a;
+  --court-ink: #299fbb;  --ball-ink: #cc7923;  --deep-ink: #927ddb;
   --court-w:#0b2f39;  --ball-w: #33230f;  --deep-w: #221d3d;
 }
 
 /* ---- Dusk: indigo against rust, on blue-violet neutrals ----------------- */
 [data-skin="dusk"] {
   --paper:  #ecedf4;  --card:   #f7f8fc;  --sunk:   #e1e3ee;
-  --ink:    #16182a;  --ink-2:  #4d5268;  --ink-3:  #7e8399;
+  --ink:    #16182a;  --ink-2:  #4d5268;  --ink-3:  #606479;
   --rule:   #d2d5e4;  --rule-2: #b9bdd1;  --grid:   #dfe1ec;
   --court:  #5468c8;  --ball:   #b64d14;  --deep:   #0d8750;
+  --court-solid: #5468c8;  --on-court: #ffffff;
+  --court-ink: #4d5eb5;  --ball-ink: #a84816;  --deep-ink: #0f7349;
   --court-w:#e0e4f8;  --ball-w: #f8e5db;  --deep-w: #d7efe4;
 }
 [data-mode="dark"][data-skin="dusk"] {
   --paper:  #0f1016;  --card:   #191b23;  --sunk:   #22242e;
-  --ink:    #edeef6;  --ink-2:  #a6aabd;  --ink-3:  #777c90;
+  --ink:    #edeef6;  --ink-2:  #a6aabd;  --ink-3:  #868b9d;
   --rule:   #2a2c38;  --rule-2: #3a3d4c;  --grid:   #252732;
   --court:  #687de0;  --ball:   #ce6330;  --deep:   #02a05e;
+  --court-solid: #687de0;  --on-court: #0c0f1c;
+  --court-ink: #7386e2;  --ball-ink: #d17246;  --deep-ink: #12a569;
   --court-w:#1b2045;  --ball-w: #341f14;  --deep-w: #0e2f22;
 }
 
@@ -195,6 +235,8 @@
   --ink:    #000000;  --ink-2:  #262b28;  --ink-3:  #4d554f;
   --rule:   #a8b0aa;  --rule-2: #848d87;  --grid:   #d4d9d5;
   --court:  #0f6b57;  --ball:   #a3391a;  --deep:   #2b3fa8;
+  --court-solid: #0f6b57;  --on-court: #ffffff;
+  --court-ink: #0f6b57;  --ball-ink: #a3391a;  --deep-ink: #2b3fa8;
   --court-w:#d6ece6;  --ball-w: #f6ddd4;  --deep-w: #dde1f6;
 }
 [data-mode="dark"][data-skin="contrast"] {
@@ -202,6 +244,8 @@
   --ink:    #ffffff;  --ink-2:  #dfe3e0;  --ink-3:  #aab2ad;
   --rule:   #4c534e;  --rule-2: #6c746e;  --grid:   #2a2e2b;
   --court:  #3fd6b4;  --ball:   #ff8a5c;  --deep:   #93a8ff;
+  --court-solid: #3fd6b4;  --on-court: #00120e;
+  --court-ink: #3fd6b4;  --ball-ink: #ff8a5c;  --deep-ink: #93a8ff;
   --court-w:#0d3830;  --ball-w: #3d2214;  --deep-w: #1c2140;
 }
 
@@ -235,7 +279,7 @@ body {
   font-weight: 900; font-stretch: 82%; font-size: 19px;
   letter-spacing: -.01em; margin: 0; white-space: nowrap;
 }
-.mark span { color: var(--court); }
+.mark span { color: var(--court-ink); }
 .top-meta {
   margin-left: auto; min-width: 0; font-family: var(--mono); font-size: 11.5px;
   color: var(--ink-3); font-variant-numeric: tabular-nums; text-align: right;
@@ -268,9 +312,12 @@ section.first { border-top: 0; }
   font-variant-numeric: tabular-nums;
 }
 .chip[aria-pressed="true"] {
-  background: var(--court); border-color: var(--court); color: #fff;
+  background: var(--court-solid); border-color: var(--court-solid);
+  color: var(--on-court);
 }
-.chip[aria-pressed="true"] .r { color: rgba(255,255,255,.72); }
+/* Full strength: dimming this to 72% put it at 3.2:1 at best and 1.5:1 in
+   Contrast dark. The count is already secondary at 11px in the mono face. */
+.chip[aria-pressed="true"] .r { color: var(--on-court); }
 
 /* ----------------------------------------------------------------- buttons */
 .btn {
@@ -280,7 +327,7 @@ section.first { border-top: 0; }
   cursor: pointer; transition: background .12s, border-color .12s, opacity .12s;
 }
 .btn:active { transform: translateY(1px); }
-.btn.primary { background: var(--court); border-color: var(--court); color: #fff; }
+.btn.primary { background: var(--court-solid); border-color: var(--court-solid); color: var(--on-court); }
 .btn.wide { width: 100%; }
 .btn.small {
   /* every .btn.small rendered 37px tall; a thumb needs 44 */
@@ -371,8 +418,8 @@ section.first { border-top: 0; }
   border-radius: 5px; background: var(--sunk); color: var(--ink-2);
   border: 1px solid var(--rule);
 }
-.tag.hot  { background: var(--deep-w); color: var(--deep); border-color: transparent; font-weight: 700; }
-.tag.warn { background: var(--ball-w); color: var(--ball); border-color: transparent; font-weight: 700; }
+.tag.hot  { background: var(--deep-w); color: var(--deep-ink); border-color: transparent; font-weight: 700; }
+.tag.warn { background: var(--ball-w); color: var(--ball-ink); border-color: transparent; font-weight: 700; }
 
 /* ---------------------------------------------------------------- the log */
 .log {
@@ -430,7 +477,10 @@ table.tally tr:last-child td { border-bottom: 0; }
 
 /* ------------------------------------------------------------ setup bits */
 .field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
-.field label {
+/* `label` is for the one caption that names a real control -- the range
+   slider. The rest name a group of buttons, which a <label> cannot do, so they
+   are spans carrying aria-labelledby instead. Both look the same. */
+.field label, .field .flab {
   font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
   color: var(--ink-3); font-weight: 800;
 }
@@ -445,7 +495,7 @@ select, input[type="text"] {
   border-right: 1.5px solid var(--rule-2);
 }
 .seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--court); color: #fff; }
+.seg button[aria-pressed="true"] { background: var(--court-solid); color: var(--on-court); }
 
 /* ------------------------------------------------------------ sticky bar */
 .bar {
@@ -523,7 +573,7 @@ select, input[type="text"] {
 }
 .disclose[aria-expanded="true"]::after { transform: rotate(180deg); }
 .disclose-sum {
-  grid-column: 1 / -1; font-size: 13px; color: var(--court); font-weight: 650;
+  grid-column: 1 / -1; font-size: 13px; color: var(--court-ink); font-weight: 650;
   margin-top: 2px;
 }
 .prefs { margin-top: 14px; }
@@ -551,7 +601,7 @@ select, input[type="text"] {
   font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--ink-3);
   padding-top: 2px;
 }
-.opt.lead .optn { color: var(--court); }
+.opt.lead .optn { color: var(--court-ink); }
 .optbody { min-width: 0; }
 .optteams {
   display: flex; flex-direction: column; gap: 1px; min-width: 0;
@@ -616,7 +666,7 @@ td .dot {
   font-family: var(--mono); font-size: 10px; letter-spacing: .09em;
   text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px;
 }
-.opt.lead .optgame:first-child .optlab { color: var(--court); }
+.opt.lead .optgame:first-child .optlab { color: var(--court-ink); }
 .sug-game + .sug-game { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--rule); }
 .sug-court {
   font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
@@ -656,7 +706,7 @@ td .dot {
   text-transform: uppercase; color: var(--ink-2);
 }
 .round.now .roundhead > span:first-child {
-  color: #fff; background: var(--court);
+  color: var(--on-court); background: var(--court-solid);
   padding: 3px 8px; border-radius: 999px;
 }
 .roundsit {
@@ -691,7 +741,7 @@ td .dot {
   font-family: var(--mono); font-size: 15px; font-weight: 700;
   font-variant-numeric: tabular-nums; min-width: 2.4ch; text-align: right;
 }
-.qnum.hi  { color: var(--court); }
+.qnum.hi  { color: var(--court-ink); }
 .qnum.mid { color: var(--ink); }
 .qnum.lo  { color: var(--ink-3); }
 
@@ -744,7 +794,7 @@ td .dot {
 .dialogmsg { margin: 0 0 16px; font-size: 15px; line-height: 1.45; text-wrap: pretty; }
 .dialogacts { display: flex; gap: 8px; }
 .dialogacts .btn { flex: 1; }
-.btn.danger { background: var(--crit); border-color: var(--crit); color: #fff; }
+.btn.danger { background: var(--crit); border-color: var(--crit); color: var(--on-crit); }
 
 /* --------------------------------------------------- adding someone new */
 .addrow { margin-top: 10px; }
@@ -773,7 +823,7 @@ td .dot {
   align-items: baseline; gap: 9px;
 }
 .sug-game.small .sug-line { grid-template-columns: auto minmax(0, 1fr); }
-.sug-game.small .sug-court { color: var(--deep); font-weight: 700; }
+.sug-game.small .sug-court { color: var(--deep-ink); font-weight: 700; }
 .sug-game.compact .why { margin-top: 5px; }
 
 /* --------------------------------------- singles, three-ways and details */
@@ -792,7 +842,7 @@ td .dot {
 
 .smalltag {
   font-family: var(--mono); font-size: 10px; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--deep);
+  text-transform: uppercase; color: var(--deep-ink);
   background: var(--deep-w); border-radius: 4px; padding: 1px 5px;
   white-space: nowrap;
 }
@@ -809,7 +859,7 @@ td .dot {
 }
 .dtable td { padding: 4px 0; color: var(--ink); vertical-align: top; }
 .dtable td.dnote {
-  color: var(--court); font-family: var(--mono); font-size: 11px;
+  color: var(--court-ink); font-family: var(--mono); font-size: 11px;
   text-align: right; padding-left: 8px;
 }
 
@@ -838,7 +888,7 @@ td .dot {
 /* Nothing charged is the good case, so it recedes; a charge is what explains
    the ranking, so it does not. */
 .dtable.why tr.free td.dcost { color: var(--ink-3); }
-.dtable.why tr.charged td.dcost { color: var(--ball); font-weight: 700; }
+.dtable.why tr.charged td.dcost { color: var(--ball-ink); font-weight: 700; }
 .dtable.why tfoot th,
 .dtable.why tfoot td {
   padding-top: 7px; color: var(--ink); font-weight: 700; font-size: 12px;
@@ -920,7 +970,7 @@ td .dot {
 }
 .qfloorval {
   font-family: var(--mono); font-size: 17px; font-weight: 700;
-  color: var(--court); font-variant-numeric: tabular-nums;
+  color: var(--court-ink); font-variant-numeric: tabular-nums;
   min-width: 3.2ch; text-align: right;
 }
 
@@ -956,7 +1006,7 @@ td .dot {
   opacity: .85;
 }
 .ileft .idate {
-  font-weight: 700; color: var(--ball); letter-spacing: .06em; text-transform: uppercase;
+  font-weight: 700; color: var(--ball-ink); letter-spacing: .06em; text-transform: uppercase;
 }
 .ileft .iteams { font-weight: 600; font-size: 12.5px; color: var(--ink-2); }
 .ileft .iscore { font-size: 12px; color: var(--ink-3); }
@@ -1059,8 +1109,8 @@ td .dot {
       play rather than sit. Tap anyone who would rather wait for a proper game.</p>
       <div class="chips" id="smallPrefs"></div>
       <div class="field">
-        <label for="courtSeg">Courts</label>
-        <div class="seg tiny" id="courtSeg">
+        <span class="flab" id="courtsLab">Courts</span>
+        <div class="seg tiny" id="courtSeg" role="group" aria-labelledby="courtsLab">
           <button type="button" data-c="1" aria-pressed="true">1</button>
           <button type="button" data-c="2" aria-pressed="false">2</button>
         </div>
@@ -1114,7 +1164,7 @@ td .dot {
     <div id="lookBody" class="hidden">
       <div class="prirow lookrow">
         <div class="prilab">Light or dark<span>follows your phone unless you say</span></div>
-        <div class="seg tiny" id="modeSeg">
+        <div class="seg tiny" id="themeSeg">
           <button type="button" data-m="auto" aria-pressed="true">Auto</button>
           <button type="button" data-m="light" aria-pressed="false">Light</button>
           <button type="button" data-m="dark" aria-pressed="false">Dark</button>
@@ -1165,8 +1215,8 @@ td .dot {
     values minus the other&rsquo;s.</p>
 
     <div class="field">
-      <label for="winSeg">Window</label>
-      <div class="seg" id="winSeg">
+      <span class="flab" id="winLab">Window</span>
+      <div class="seg" id="winSeg" role="group" aria-labelledby="winLab">
         <button type="button" data-w="20" aria-pressed="false">20</button>
         <button type="button" data-w="40" aria-pressed="true">40</button>
         <button type="button" data-w="80" aria-pressed="false">80</button>
@@ -1176,8 +1226,8 @@ td .dot {
     </div>
 
     <div class="field">
-      <label for="modeSeg">Lines</label>
-      <div class="seg" id="modeSeg">
+      <span class="flab" id="linesLab">Lines</span>
+      <div class="seg" id="modeSeg" role="group" aria-labelledby="linesLab">
         <button type="button" data-m="together" aria-pressed="true">Together</button>
         <button type="button" data-m="separate" aria-pressed="false">Separate</button>
       </div>
@@ -1772,11 +1822,21 @@ function restore() {
     if (!v || !Array.isArray(v.here)) return;
     PERSIST.forEach((k) => { if (v[k] !== undefined) S[k] = v[k]; });
 
+    /* An empty stored key means "not recorded yet", which is not the same as
+     * "a different log". The key is only ever written by a successful fetch,
+     * and this copy is meant to work with no signal at all -- so in a gym it
+     * stayed empty, every save recorded it empty, and the next reload read
+     * that as a mismatch and threw away the roster, the queue and everything
+     * played. One backgrounded tab coming back was enough to lose a night.
+     *
+     * So only a key that names a *different* source forgets anybody. That
+     * still covers what this was written for: a copy carrying no data of its
+     * own, opened on a phone that had used a real sheet, has a stored key that
+     * does not match and does not bring the other group's names with it. */
     const willUse = linkSource() || S.sourceUrl || BOOT.url || "";
-    if (!willUse || (v.srcKey || "") !== willUse) {
-      forgetPeople();
-      S.srcKey = willUse;
-    }
+    const had = v.srcKey || "";
+    if (had && had !== willUse) forgetPeople();
+    S.srcKey = willUse;
   } catch (e) { /* corrupt or unavailable */ }
 }
 
@@ -1933,9 +1993,15 @@ function context() {
   const fit = ridge(games, rosterOf(games));
   const rate = Object.fromEntries(fit.players.map((p, i) => [p, fit.beta[i]]));
 
+  /* Two views of tonight. `tonight` is flattened to two sides for tally(),
+   * which counts partnerships and matchups and has nothing to say about a
+   * singles or a three-way. Court time is counted off the games themselves:
+   * flattening first dropped `c`, so the third player in a three-way was
+   * invisible to the one count the app promises to hold level, and the planner
+   * kept putting them back on to make up a shortfall they did not have. */
   const tonight = S.games.concat(S.plan).map((g) => ({ a: g.a, b: g.b }));
   const played = Object.fromEntries(roster.map((p) => [p, 0]));
-  tonight.forEach((g) => playersOf(g).forEach((p) => {
+  S.games.concat(S.plan).forEach((g) => playersOf(g).forEach((p) => {
     if (p in played) played[p]++;
   }));
 
@@ -2491,7 +2557,7 @@ function render() {
 function renderMeta() {
   const n = S.games.length, q = S.plan.length;
   $("#topMeta").innerHTML = S.tab === "ratings"
-    ? `${LOG.length} games · ${SOURCE}<br>through ${lastDate()}`
+    ? `${LOG.length} games · ${SOURCE}<br>through ${esc(lastDate())}`
     : `${n} played · ${q} planned<br>${S.here.length} here · ${LOG.length} in the log`;
 }
 
@@ -3245,7 +3311,7 @@ function renderLook() {
   $("#lookSum").textContent = skin.label.toLowerCase() + " · "
     + (S.theme === "auto" ? "auto" : S.theme);
 
-  $$("#modeSeg button").forEach((b) => {
+  $$("#themeSeg button").forEach((b) => {
     b.setAttribute("aria-pressed", b.dataset.m === S.theme ? "true" : "false");
   });
 
@@ -3315,6 +3381,29 @@ function customQualityHTML(c) {
     </div>`;
 }
 
+/**
+ * What the unplanned-game form has to say about itself, and whether it can be
+ * added yet.
+ *
+ * Both the full redraw and the keystroke-by-keystroke update read this. Keeping
+ * two copies of it in step failed: the incremental one had no "same person
+ * twice" branch, so typing a score after picking somebody twice replaced
+ * "Someone is on both teams" with "Pick four players" -- when four were picked.
+ */
+function customState(c) {
+  const chosen = c.p.filter(Boolean);
+  const dupes = chosen.length !== new Set(chosen).size;
+  const full = chosen.length === 4 && !dupes;
+  const sa = parseInt(c.sa, 10), sb = parseInt(c.sb, 10);
+  const scored = !isNaN(sa) && !isNaN(sb) && sa !== sb && Math.max(sa, sb) > 0;
+  const note = dupes ? "Someone is on both teams."
+    : !full ? "Pick four players."
+    : !scored ? "Enter the final score."
+    : `${(sa > sb ? [c.p[0], c.p[1]] : [c.p[2], c.p[3]]).join(" & ")} win `
+      + `${Math.max(sa, sb)}\u2013${Math.min(sa, sb)}.`;
+  return { full, scored, dupes, note, ready: full && scored };
+}
+
 function renderCustom() {
   const host = $("#custom");
   const known = rosterOf(allGames());
@@ -3322,11 +3411,7 @@ function renderCustom() {
   known.sort();
 
   const c = S.custom;
-  const chosen = c.p.filter(Boolean);
-  const dupes = chosen.length !== new Set(chosen).size;
-  const full = chosen.length === 4 && !dupes;
-  const sa = parseInt(c.sa, 10), sb = parseInt(c.sb, 10);
-  const scored = !isNaN(sa) && !isNaN(sb) && sa !== sb && Math.max(sa, sb) > 0;
+  const st = customState(c);
 
   const pick = (i) => `<select class="cpick" data-i="${i}"
       aria-label="Player ${i + 1}"><option value="">player</option>` +
@@ -3344,18 +3429,13 @@ function renderCustom() {
       <input class="cscore" inputmode="numeric" maxlength="2" data-s="sb"
              value="${esc(c.sb)}" placeholder="0" aria-label="Score for the second team">
     </div>
-    ${full ? customQualityHTML(c) : ""}
-    <p class="note cnote">${
-      dupes ? "Someone is on both teams."
-      : !full ? "Pick four players."
-      : !scored ? "Enter the final score."
-      : `${(sa > sb ? [c.p[0], c.p[1]] : [c.p[2], c.p[3]]).join(" & ")} win `
-        + `${Math.max(sa, sb)}\u2013${Math.min(sa, sb)}.`}</p>`;
+    ${st.full ? customQualityHTML(c) : ""}
+    <p class="note cnote">${esc(st.note)}</p>`;
 
   const add = document.createElement("button");
   add.className = "btn primary wide"; add.type = "button";
   add.textContent = "Add to tonight";
-  add.disabled = !(full && scored);
+  add.disabled = !st.ready;
   add.onclick = () => {
     /* Read the score now, not at render time. Typing updates the state without
      * a redraw so the caret survives, which left this closure holding whatever
@@ -3551,7 +3631,7 @@ function ratingNote() {
     `every game. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
     `games inside the window &mdash; ridge would pull them to zero, which reads as ` +
     `"average" when it means "wasn't there".` +
-    (off.length ? ` Not plotted: <b>${off.join(", ")}</b>, under ${chartMinGames()} ` +
+    (off.length ? ` Not plotted: <b>${esc(off.join(", "))}</b>, under ${chartMinGames()} ` +
       `games in the log.` : "");
 }
 
@@ -3739,6 +3819,27 @@ function drawChart(series, roster, games) {
   (mode === "separate" ? drawFacets : drawOverlay)(host, series, roster, games, data);
 }
 
+/**
+ * The widest of these names, as this chart will actually draw them.
+ *
+ * Measured rather than estimated, because the face is whatever the phone has.
+ * The gutters that hold the direct labels were fixed at 56px on the right and
+ * 30px on the left, which fitted this group and nothing else -- and an <svg>
+ * clips to its own viewBox without a word, so a name simply lost its last
+ * letters -- and not only for unusual names: at four selected players the
+ * faceted chart was already clipping the first letter off five-character ones.
+ */
+function labelWidth(svg, names, size, weight) {
+  const t = mk("text", { "font-size": size, "font-weight": weight, opacity: 0 }, svg);
+  let w = 0;
+  for (const n of names) {
+    t.textContent = n;
+    w = Math.max(w, t.getComputedTextLength());
+  }
+  t.remove();
+  return Math.ceil(w);
+}
+
 /* ---- up to three players: one chart, validated hues -------------------- */
 function drawOverlay(host, series, roster, games, data) {
   const W = Math.max(280, host.clientWidth || 320);
@@ -3746,17 +3847,20 @@ function drawOverlay(host, series, roster, games, data) {
   // 222px plot cannot hold that without them colliding
   const H = Math.min(360, Math.max(200,
     Math.round(W * 0.62) + Math.max(0, S.shown.length - 4) * 22));
-  const padL = 34, padR = 56, padT = 12, padB = 26;
+  const svg = mk("svg", {
+    viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+    "aria-label": "Rating over time for the selected players",
+  }, host);
+
+  const padL = 34, padT = 12, padB = 26;
+  // room for the longest name, capped so a silly one cannot eat the plot
+  const padR = Math.min(Math.round(W * 0.45),
+                        Math.max(56, labelWidth(svg, S.shown, 11, 700) + 12));
   const iw = W - padL - padR, ih = H - padT - padB;
   const { pts, lo, hi } = data;
   const x0 = series[0].i, x1 = series[series.length - 1].i;
   const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
   const Y = (v) => padT + (hi - v) / (hi - lo) * ih;
-
-  const svg = mk("svg", {
-    viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
-    "aria-label": "Rating over time for the selected players",
-  }, host);
 
   const step = niceStep(hi - lo);
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
@@ -3831,18 +3935,23 @@ function drawOverlay(host, series, roster, games, data) {
 /* ---- four or more: small multiples, no colour discrimination needed ---- */
 function drawFacets(host, series, roster, games, data) {
   const W = Math.max(280, host.clientWidth || 320);
-  const padL = 30, padR = 44, rowH = 62, gap = 6, padB = 22, padT = 4;
+  const padR = 44, rowH = 62, gap = 6, padB = 22, padT = 4;
   const n = S.shown.length;
   const H = padT + n * rowH + (n - 1) * gap + padB;
-  const iw = W - padL - padR;
-  const { pts, lo, hi } = data;
-  const x0 = series[0].i, x1 = series[series.length - 1].i;
-  const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
 
   const svg = mk("svg", {
     viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
     "aria-label": "Rating over time, one panel per selected player",
   }, host);
+
+  /* Each name is drawn to the left of its panel, ending 5px short of it, so
+     the gutter has to be as wide as the longest one. */
+  const padL = Math.min(Math.round(W * 0.45),
+                        Math.max(30, labelWidth(svg, S.shown, 11, 700) + 9));
+  const iw = W - padL - padR;
+  const { pts, lo, hi } = data;
+  const x0 = series[0].i, x1 = series[series.length - 1].i;
+  const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
 
   // ordered by where each player stands now, so the stack itself ranks them
   const order = S.shown.slice().sort((a, b) => {
@@ -3962,7 +4071,7 @@ function renderFoot() {
     margin grows: that margin is pushed through the exact mathematics of a race
     to ${S.target}, win by 2, and the resulting win probability is turned back
     into a single number.</p>
-    <p>Data: ${LOG.length} games through ${lastDate()} &mdash;
+    <p>Data: ${LOG.length} games through ${esc(lastDate())} &mdash;
     ${SOURCE === "none" ? "<b>no source set yet</b>" : `the <b>${SOURCE}</b> copy`}.
     Tonight&rsquo;s results count toward the ratings and the novelty counts as
     you enter them, but nothing is written back to the sheet; use
@@ -3980,14 +4089,21 @@ function csvText() {
 }
 function copyCsv() {
   const text = csvText();
+  /* Count what was actually copied, not what was played. A singles or a
+     three-way has nowhere to go in a sheet with four player columns, so
+     csvText leaves it out -- and saying "8 rows copied" when seven were is
+     exactly the kind of thing nobody checks until the sheet is wrong. */
+  const rows = text ? text.split("\n").length - 1 : 0;
+  const left = S.games.length - rows;
   const holder = $("#csvOut");
-  holder.innerHTML = `<textarea class="csvbox" rows="${Math.min(S.games.length + 2, 10)}" readonly></textarea>`;
+  holder.innerHTML = `<textarea class="csvbox" rows="${Math.min(rows + 2, 10)}" readonly></textarea>`;
   const ta = holder.querySelector("textarea");
   ta.value = text; holder.classList.remove("hidden");
   const fallback = () => { ta.select(); toast("Select and copy the rows below"); };
+  const said = `${rows} row${rows === 1 ? "" : "s"} copied`
+    + (left ? ` — ${left} small game${left === 1 ? "" : "s"} left out` : "");
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text)
-      .then(() => toast(`${S.games.length} rows copied`)).catch(fallback);
+    navigator.clipboard.writeText(text).then(() => toast(said)).catch(fallback);
   } else fallback();
 }
 
@@ -4007,7 +4123,15 @@ function wire() {
 
   const addName = () => {
     const el = $("#newName");
-    const name = el.value.trim().replace(/\s+/g, " ");
+    /* Everything downstream is a plain, unquoted CSV: csvText() joins fields
+     * with a bare comma, and parseCsv splits on one just as plainly. A name
+     * typed as "Smith, Jane" -- a plausible last-name-first habit -- would
+     * turn one exported row into eight comma-separated fields instead of
+     * seven, and "Copy tonight as CSV" exists specifically to paste results
+     * back into the group's own sheet. So a comma is stripped here, at the
+     * one place free text becomes a name, rather than taught to the CSV
+     * reader and writer both. */
+    const name = el.value.trim().replace(/\s+/g, " ").replace(/,/g, "");
     if (!name) return;
     const clash = knownPlayers().list.find(
       (p) => p.toLowerCase() === name.toLowerCase());
@@ -4140,8 +4264,19 @@ function wire() {
     const el = e.target.closest(".logscore");
     if (el) el.select();
   });
+  /* The played log's scores had the same defect the planned cards did: a
+     redraw on every focusout replaced the box the next tap was heading for, so
+     tapping from one score to the other lost the tap and the keystrokes after
+     it. The redraw is still wanted -- editing a score can change who won, and
+     the row says so -- but only once focus has actually left the log. */
   $("#log").addEventListener("focusout", (e) => {
-    if (e.target.closest(".logscore")) render();
+    const el = e.target.closest(".logscore");
+    if (!el) return;
+    const g = S.games[Number(el.dataset.i)];
+    if (g) el.value = g[el.dataset.s];          // show the stored number back
+    setTimeout(() => {
+      if (!$("#log").contains(document.activeElement)) render();
+    }, 0);
   });
 
   const customHost = $("#custom");
@@ -4159,21 +4294,21 @@ function wire() {
     // rebuild only the note and the button, so the field keeps its caret
     const note = customHost.querySelector(".cnote");
     const btn = customHost.querySelector(".btn");
-    const c = S.custom, chosen = c.p.filter(Boolean);
-    const full = chosen.length === 4 && chosen.length === new Set(chosen).size;
-    const sa = parseInt(c.sa, 10), sb = parseInt(c.sb, 10);
-    const scored = !isNaN(sa) && !isNaN(sb) && sa !== sb && Math.max(sa, sb) > 0;
-    if (btn) btn.disabled = !(full && scored);
-    if (note) note.textContent = !full ? "Pick four players."
-      : !scored ? "Enter the final score."
-      : `${(sa > sb ? [c.p[0], c.p[1]] : [c.p[2], c.p[3]]).join(" & ")} win `
-        + `${Math.max(sa, sb)}\u2013${Math.min(sa, sb)}.`;
+    const st = customState(S.custom);
+    if (btn) btn.disabled = !st.ready;
+    if (note) note.textContent = st.note;
   });
 
   $("#sourceToggle").onclick = () => { S.sourceOpen = !S.sourceOpen; save(); render(); };
 
   $("#lookToggle").onclick = () => { S.lookOpen = !S.lookOpen; save(); renderLook(); };
-  $$("#modeSeg button").forEach((b) => {
+  /* This control and the chart's "Lines" control both answered to #modeSeg,
+     and $$ is querySelectorAll -- so one selector reached all five buttons and
+     this handler, wired second, overwrote the chart's. Together/Separate then
+     did nothing to the chart and wrote "separate" into S.theme instead, while
+     still lighting up, because renderLook marks whichever button matches the
+     theme it had just corrupted. */
+  $$("#themeSeg button").forEach((b) => {
     b.onclick = () => { S.theme = b.dataset.m; save(); applyTheme(); renderLook(); };
   });
   /* On Auto the phone can change its mind while the page is open -- at sunset,
