@@ -475,6 +475,30 @@ table.tally td.dim { color: var(--ink-3); }
 table.tally tr:last-child td { border-bottom: 0; }
 .scroll-x { overflow-x: auto; }
 
+/* -------------------------------------------------------------- matchups
+   Modelled on .log and .irow: a card list that flows with the page rather
+   than a table, so a phone reads it top to bottom instead of scrolling each
+   row sideways. A table was tried for the ratings standings this replaced
+   in an earlier version of this idea and came out the other way -- "reported
+   two numbers without saying which to trust" -- for the same reason a wide
+   table reads badly here: too many columns to take in as one row. */
+.mlist {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--rule); border: 1px solid var(--rule); border-radius: var(--r);
+  overflow: hidden;
+}
+.mrow { padding: 10px 12px; background: var(--card); }
+.mhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.mteams { font-size: 14px; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.mteams .v { color: var(--ink-3); font-style: normal; font-weight: 400; padding: 0 .15em; }
+.mteams .amp { color: var(--ink-3); font-weight: 500; padding: 0 .1em; }
+.mmeta {
+  font-size: 12px; color: var(--ink-2); margin-top: 4px;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.mmeta .pos { color: var(--good); font-weight: 700; }
+.mmeta .neg { color: var(--crit); font-weight: 700; }
+
 /* ------------------------------------------------------------ setup bits */
 .field { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 /* `label` is for the one caption that names a real control -- the range
@@ -982,7 +1006,7 @@ td .dot {
 .ratingside { margin-top: 26px; }
 
 @media (min-width: 880px) {
-  #tabRatings { max-width: 1080px; }
+  #tabRatings, #tabMatchups { max-width: 1080px; }
   body.wide .top-in, body.wide .tabs { max-width: 1080px; }
   .ratinglayout {
     display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
@@ -1050,6 +1074,7 @@ td .dot {
   <nav class="tabs" id="tabs">
     <button type="button" data-tab="tonight" aria-pressed="true">Tonight</button>
     <button type="button" data-tab="ratings" aria-pressed="false">Ratings</button>
+    <button type="button" data-tab="matchups" aria-pressed="false">Matchups</button>
   </nav>
 </header>
 
@@ -1270,6 +1295,35 @@ td .dot {
   </section>
 
   <footer class="foot" id="foot2"></footer>
+</main>
+
+<!-- ==================================================== 3 · every matchup -->
+<main class="wrap hidden" id="tabMatchups">
+
+  <section class="first">
+    <h2>Every matchup</h2>
+    <p class="note">Every way to split the players with at least <b id="matchupMinNote">20</b>
+    games into two teams of two &mdash; whether you have actually played it or
+    not. Quality comes from current form; everything else is what actually
+    happened.</p>
+
+    <div class="chips" id="matchupPick"></div>
+
+    <div class="field" style="margin-top:14px">
+      <span class="flab" id="matchupModeLab">Matching</span>
+      <div class="seg tiny" id="matchupMode" role="group" aria-labelledby="matchupModeLab">
+        <button type="button" data-m="all" aria-pressed="true">All</button>
+        <button type="button" data-m="any" aria-pressed="false">Any</button>
+      </div>
+    </div>
+
+    <p class="note" id="matchupNote" style="margin-top:12px"></p>
+
+    <div class="mlist" id="matchupList"></div>
+    <p class="note" id="matchupFoot" style="margin-top:10px"></p>
+  </section>
+
+  <footer class="foot" id="foot3"></footer>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1783,6 +1837,8 @@ const S = {
   skin: "court",       // which palette; see the skins block in the CSS
   lookOpen: false,
   srcKey: "",          // which log the people below belong to
+  matchupSel: [],      // players picked in the Matchups tab
+  matchupAll: true,    // true = every one picked must be in it; false = any
 };
 
 /* Anything that is about *these* people, as opposed to how the reader likes
@@ -1791,13 +1847,13 @@ const S = {
  * log. */
 function forgetPeople() {
   S.here = []; S.extra = []; S.games = []; S.plan = [];
-  S.shown = []; S.noSmall = []; S.discarded = [];
+  S.shown = []; S.noSmall = []; S.discarded = []; S.matchupSel = [];
   S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
 }
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
                  "plan", "games", "window", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
-                 "srcKey", "theme", "skin", "lookOpen"];
+                 "srcKey", "theme", "skin", "lookOpen", "matchupSel", "matchupAll"];
 
 function save() {
   try {
@@ -2543,21 +2599,24 @@ function toast(msg) {
 /* ================================================================== render */
 
 function render() {
-  // the ratings tab runs wider than the phone column, and the header has to
-  // follow it or the wordmark floats in the middle of the page
-  document.body.classList.toggle("wide", S.tab === "ratings");
+  // the ratings and matchups tabs run wider than the phone column, and the
+  // header has to follow or the wordmark floats in the middle of the page
+  document.body.classList.toggle("wide", S.tab !== "tonight");
   $("#tabTonight").classList.toggle("hidden", S.tab !== "tonight");
   $("#tabRatings").classList.toggle("hidden", S.tab !== "ratings");
+  $("#tabMatchups").classList.toggle("hidden", S.tab !== "matchups");
   $$("#tabs button").forEach((b) =>
     b.setAttribute("aria-pressed", b.dataset.tab === S.tab ? "true" : "false"));
 
-  if (S.tab === "tonight") renderTonight(); else renderRatings();
+  if (S.tab === "tonight") renderTonight();
+  else if (S.tab === "ratings") renderRatings();
+  else renderMatchups();
   renderMeta();
 }
 
 function renderMeta() {
   const n = S.games.length, q = S.plan.length;
-  $("#topMeta").innerHTML = S.tab === "ratings"
+  $("#topMeta").innerHTML = S.tab !== "tonight"
     ? `${LOG.length} games · ${SOURCE}<br>through ${esc(lastDate())}`
     : `${n} played · ${q} planned<br>${S.here.length} here · ${LOG.length} in the log`;
 }
@@ -4059,6 +4118,157 @@ function niceStep(range) {
 }
 
 
+/* -------------------------------------------------------- 6 · every matchup
+
+   The other two tabs are both about *tonight* -- who to play next, how form
+   is moving. This one is a reference: for the players seen enough to trust,
+   every way to split them into two teams of two, played or not, with the
+   quality current form gives it and whatever history there actually is.
+
+   Deliberately does not touch CTX or the win-probability cache the planner
+   uses -- those are scoped to *tonight's* roster and get cleared on every
+   Tonight paint, which would make this tab's numbers depend on which tab was
+   open last. A fresh rating fit is taken directly off the whole log instead.
+*/
+const MATCHUP_MIN_GAMES = 20;
+
+/** Doubles players seen at least this many times in the whole log. Small
+ *  games do not count -- they are not partnerships, and this tab is. */
+function matchupEligible() {
+  const total = {};
+  allGames().forEach((g) => { if (!isSmall(g)) playersOf(g).forEach((p) => {
+    total[p] = (total[p] || 0) + 1;
+  }); });
+  return Object.keys(total).filter((p) => total[p] >= MATCHUP_MIN_GAMES)
+    .sort((x, y) => total[y] - total[x]);
+}
+
+/** Every way to deal `players` into foursomes of two teams -- one row per
+ *  matchup, whether it has ever been played. Reuses the same combinatorics
+ *  the planner enumerates rounds with. */
+function allMatchups(players) {
+  const out = [];
+  for (const four of combosK(players, 4)) for (const s of splitsOf(four)) out.push(s);
+  return out;
+}
+
+const marginOfRate = (a, b, rate) =>
+  a.reduce((t, p) => t + (rate[p] || 0), 0) - b.reduce((t, p) => t + (rate[p] || 0), 0);
+
+/** Orient a pair the way every other card in the app does: the stronger side
+ *  first, by current rating rather than by however the sheet logged it. */
+const orientByRate = (a, b, rate) =>
+  (marginOfRate(a, b, rate) < 0 ? { a: b, b: a } : { a, b });
+
+/**
+ * Everything the table shows about one matchup.
+ *
+ * `games` is the doubles log already filtered once, so 210 matchups do not
+ * each re-filter the whole thing -- a scan per matchup is still ~350 simple
+ * comparisons at this group's size, cheap enough not to need memoising.
+ */
+function matchupRow(pair, rate, games) {
+  const { a, b } = orientByRate(pair.a, pair.b, rate);
+  const p = pFromMargin(marginOfRate(a, b, rate), S.target);
+  const winProb = gameWinProb(p, S.target);
+  const quality = Math.round(100 * (1 - 2 * Math.abs(winProb - 0.5)));
+
+  const key = matchKey(a, b);
+  const hist = games.filter((g) => matchKey(g.a, g.b) === key);
+  let wa = 0, wb = 0, last = null;
+  for (const g of hist) {
+    const aFirst = teamKey(g.a) === teamKey(a);
+    const sa = aFirst ? g.sa : g.sb, sb = aFirst ? g.sb : g.sa;
+    if (sa > sb) wa++; else wb++;
+    last = { sa, sb, date: g.date };            // games() is chronological
+  }
+  return { a, b, quality, played: hist.length, wa, wb, last };
+}
+
+/** All rows, most-played first so real history leads; ties on that go to the
+ *  closer matchup. Untried ones -- played: 0 -- sort to the bottom. */
+function matchupRows() {
+  const games = allGames();
+  const fit = ridge(games, rosterOf(games));
+  const rate = Object.fromEntries(fit.players.map((p, i) => [p, fit.beta[i]]));
+  const eligible = matchupEligible();
+  const dbl = games.filter((g) => !isSmall(g));
+  const rows = allMatchups(eligible).map((pr) => matchupRow(pr, rate, dbl));
+  rows.sort((x, y) => y.played - x.played || x.quality - y.quality);
+  return { rows, eligible };
+}
+
+/** Whether a matchup is on-screen at all, given the picked players. */
+function matchupPasses(row, sel, all) {
+  if (!sel.length) return true;
+  const four = row.a.concat(row.b);
+  return all ? sel.every((p) => four.includes(p)) : sel.some((p) => four.includes(p));
+}
+
+function renderMatchups() {
+  const { rows, eligible } = matchupRows();
+  S.matchupSel = S.matchupSel.filter((p) => eligible.includes(p));
+  $("#matchupMinNote").textContent = MATCHUP_MIN_GAMES;
+
+  const total = {};
+  allGames().forEach((g) => { if (!isSmall(g)) playersOf(g).forEach((p) => {
+    total[p] = (total[p] || 0) + 1;
+  }); });
+  const pickHost = $("#matchupPick");
+  pickHost.innerHTML = "";
+  for (const p of eligible) {
+    const on = S.matchupSel.includes(p);
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button";
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.innerHTML = `${esc(p)}<span class="r">${total[p]}</span>`;
+    b.onclick = () => {
+      const i = S.matchupSel.indexOf(p);
+      if (i >= 0) S.matchupSel.splice(i, 1); else S.matchupSel.push(p);
+      save(); renderMatchups();
+    };
+    pickHost.appendChild(b);
+  }
+
+  $$("#matchupMode button").forEach((b) =>
+    b.setAttribute("aria-pressed", (b.dataset.m === "all") === S.matchupAll ? "true" : "false"));
+
+  if (eligible.length < 4) {
+    $("#matchupNote").textContent = `Needs at least four players with `
+      + `${MATCHUP_MIN_GAMES}+ games in the log — ${eligible.length} so far.`;
+    $("#matchupList").innerHTML = "";
+    $("#matchupFoot").textContent = "";
+    return;
+  }
+
+  const shown = rows.filter((r) => matchupPasses(r, S.matchupSel, S.matchupAll));
+  $("#matchupNote").textContent = `${eligible.length} players with `
+    + `${MATCHUP_MIN_GAMES}+ games — ${rows.length} possible matchups`
+    + (S.matchupSel.length ? `, ${shown.length} shown` : "") + ".";
+
+  $("#matchupList").innerHTML = shown.map((r) => {
+    const band = r.quality >= 80 ? "hi" : r.quality >= 55 ? "mid" : "lo";
+    const cls = !r.played ? "dim" : r.wa > r.wb ? "pos" : r.wa < r.wb ? "neg" : "dim";
+    const meta = r.played
+      ? `${r.played} played &middot; record <span class="${cls}">${r.wa}–${r.wb}</span> `
+        + `&middot; last ${r.last.sa}–${r.last.sb} on ${esc(r.last.date)}`
+      : "never played";
+    return `<div class="mrow">
+      <div class="mhead">
+        <span class="mteams">${teamHTML(r.a)}<i class="v"> v </i>${teamHTML(r.b)}</span>
+        <span class="qnum ${band}">${r.quality}</span>
+      </div>
+      <div class="mmeta">${meta}</div>
+    </div>`;
+  }).join("");
+
+  $("#matchupFoot").textContent = shown.length
+    ? "Record and last score put the team current form favours first, not "
+      + "however the sheet happened to log them. Green: that side is also "
+      + "ahead head-to-head; red: the other side actually leads the history."
+    : "Nobody left once the filter is applied.";
+}
+
 /* ==================================================================== misc */
 function renderFoot() {
   const html = `
@@ -4077,6 +4287,7 @@ function renderFoot() {
     <b>Copy tonight as CSV</b> for that. Everything stays on this device.</p>`;
   $("#foot").innerHTML = html;
   $("#foot2").innerHTML = html;
+  $("#foot3").innerHTML = html;
 }
 
 function csvText() {
@@ -4166,6 +4377,9 @@ function wire() {
   });
   $$("#modeSeg button").forEach((b) => {
     b.onclick = () => { S.chartMode = b.dataset.m; save(); renderRatings(); };
+  });
+  $$("#matchupMode button").forEach((b) => {
+    b.onclick = () => { S.matchupAll = b.dataset.m === "all"; save(); renderMatchups(); };
   });
   const onRange = () => {
     let lo = Number($("#fromR").value) / 100, hi = Number($("#toR").value) / 100;
