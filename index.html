@@ -727,6 +727,50 @@ td .dot {
   text-align: right; padding-left: 8px;
 }
 
+/* ---- why a suggestion ranked where it did
+   The picker compares arrangements on one number; this is that number taken
+   apart. The points column is the only thing here that ranks, so it is the
+   only thing set in the mono face and right-aligned -- the eye can run down it
+   and find what a plan is being charged for without reading the sentences. */
+.dtable.why { margin-top: 2px; }
+.dtable.why thead th {
+  font-size: 10px; letter-spacing: .07em; text-transform: uppercase;
+  color: var(--ink-3); border-bottom: 1px solid var(--rule);
+  padding-bottom: 5px; font-weight: 700;
+}
+.dtable.why tbody tr { border-bottom: 1px solid var(--rule-2); }
+.dtable.why tbody th { font-weight: 650; color: var(--ink-2); font-size: 12px; }
+.dtable.why td { font-size: 12px; }
+.dtable.why td.dset {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  padding-right: 10px; white-space: nowrap;
+}
+.dtable.why td.dcost {
+  font-family: var(--mono); text-align: right; white-space: nowrap;
+  padding-left: 10px; font-variant-numeric: tabular-nums;
+}
+/* Nothing charged is the good case, so it recedes; a charge is what explains
+   the ranking, so it does not. */
+.dtable.why tr.free td.dcost { color: var(--ink-3); }
+.dtable.why tr.charged td.dcost { color: var(--ball); font-weight: 700; }
+.dtable.why tfoot th,
+.dtable.why tfoot td {
+  padding-top: 7px; color: var(--ink); font-weight: 700; font-size: 12px;
+}
+.dtable.why tfoot td { color: var(--ink-3); font-weight: 400; font-size: 11px; }
+.dtable.why tfoot td.dcost {
+  color: var(--ink); font-weight: 700; font-size: 13px;
+}
+
+.dwhy {
+  margin: 0 0 9px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45;
+}
+.dwhy b { color: var(--ink); font-family: var(--mono); }
+.daside {
+  margin: 9px 0 0; font-size: 11.5px; color: var(--ink-3); line-height: 1.45;
+}
+.daside b { color: var(--ink-2); font-family: var(--mono); }
+
 /* ------------------------------------------------------ the visible range */
 .rangewrap { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .rangewrap input[type="range"] {
@@ -2086,10 +2130,12 @@ function suggestions(limit = 3) {
    * cannot keep a promise: with a quality floor on, every candidate that
    * clears it may bench the same person, and then no penalty is large enough.
    * It is a filter in the passes below instead. */
-  const keep = (rounds, sits, cost, btb) => {
+  const keep = (rounds, sits, cost, btb, extra) => {
     const kk = keyer(rounds);
     const prev = best.get(kk);
-    if (!prev || cost < prev.cost) best.set(kk, { rounds, sits, cost, btb });
+    if (!prev || cost < prev.cost) {
+      best.set(kk, { rounds, sits, cost, btb, extra });
+    }
   };
 
   /** Cheapest way to split a partition, and its cost. */
@@ -2132,11 +2178,11 @@ function suggestions(limit = 3) {
           for (const combo of splitCombos(part)) {
             let c = 0;
             for (const g of combo) c += gameCost(g.a, g.b, C);
-            keep([withSmall(combo)], [sit], base + c, btb);
+            keep([withSmall(combo)], [sit], base + c, btb, extra);
           }
         } else {
           const [combo, cost] = bestSplit(part);
-          keep([withSmall(combo)], [sit], base + cost, btb);
+          keep([withSmall(combo)], [sit], base + cost, btb, extra);
         }
         continue;
       }
@@ -2149,7 +2195,7 @@ function suggestions(limit = 3) {
       const [combo, cost] = bestSplit(part);
       for (const part2 of partitionInto4s(leftover, k)) {
         const [combo2, cost2] = bestSplit(part2);
-        keep([combo, combo2], [leftover, lineup], cost + cost2, 0);
+        keep([combo, combo2], [leftover, lineup], cost + cost2, 0, 0);
       }
     }
   }
@@ -2215,12 +2261,20 @@ function suggestions(limit = 3) {
       takenPairs.push(pairsOf(o.rounds));
       picked.push({
         key, cost: o.cost, paired, worst: wq,
+        btb: o.btb, extra: o.extra || 0,
+        // which requirements had to come off before this one could be shown
+        relaxed: [!pass.floor && S.minQ ? "the quality floor" : null,
+                  !pass.rested ? "nobody sitting twice running" : null,
+                  !pass.varied ? "being different from the ones above" : null]
+                 .filter(Boolean),
         rounds: o.rounds.map((r, i) => ({ games: r.map(orient), sit: o.sits[i] })),
       });
     }
     if (picked.length >= limit) break;
   }
   picked.metFloor = metFloor;
+  // how many distinct arrangements the three on screen were chosen from
+  picked.considered = ranked.length;
   return picked;
 }
 
@@ -2754,7 +2808,7 @@ function renderSuggestions() {
 
     const det = document.createElement("div");
     det.className = "details hidden";
-    det.innerHTML = detailsHTML(o, C);
+    det.innerHTML = detailsHTML(o, C, opts, n);
     card.appendChild(det);
 
     const acts = document.createElement("div");
@@ -2810,59 +2864,191 @@ function renderSuggestions() {
  * is, how fresh the partnerships are tonight and over the whole log, who is
  * being rested, and what any small game costs the people in it.
  */
-function detailsHTML(o, C) {
-  const rows = [];
-  const games = o.rounds.flatMap((r) => r.games);
-  const doubles = games.filter((g) => !isSmall(g));
+/**
+ * The same arithmetic gameCostRaw does, kept apart so it can be shown.
+ *
+ * The picker compares thousands of arrangements on one number, and that number
+ * was the one thing the details panel never showed: you could see what a plan
+ * was, but not why it beat the others or why it came second. This re-runs the
+ * cost for one plan and keeps the terms separate, so each preference can be
+ * given its own line with the points it actually contributed.
+ *
+ * It re-derives rather than recording during the search on purpose. Only three
+ * plans are ever shown, so this runs three times against tens of thousands of
+ * scored candidates -- carrying a breakdown through the hot loop would cost far
+ * more than it saves. The two terms that are properties of the round rather
+ * than of its games, `btb` and `extra`, cannot be re-derived from the games and
+ * are carried on the option instead.
+ *
+ * A test asserts that the parts sum to the cost the search actually ranked on;
+ * a breakdown that quietly disagreed with the ranking would be worse than none.
+ */
+function costParts(o, C) {
+  const W = S.w;
+  const doubles = [];
+  for (const r of o.rounds) for (const g of r.games) if (!isSmall(g)) doubles.push(g);
 
-  const qs = doubles.map(qualityOf);
-  if (qs.length) {
-    const worst = Math.min(...qs);
-    rows.push(["Game quality", qs.join(" · "),
-      S.minQ ? (worst >= S.minQ ? `clears ${S.minQ}` : `below ${S.minQ}`)
-             : (qs.length > 1 ? `worst ${worst}` : "")]);
-  }
+  let comp = 0, floor = 0, pn = 0, ma = 0, rep = 0;
+  let worstQ = 100, freshPairs = 0, pairs = 0, neverPlayed = 0, repeats = 0;
 
-  let freshNight = 0, freshEver = 0, pairs = 0;
   for (const g of doubles) {
+    const p = winProbOf(g.a, g.b);
+    comp += QUALITY_TIE * (p - 0.5) * (p - 0.5) * 4;
+
+    const q = qualityOf(g);
+    worstQ = Math.min(worstQ, q);
+    const short = Math.max(0, S.minQ - q) / 100;
+    floor += FLOOR_MISS_W * short + FLOOR_MISS_W2 * short * short;
+
     for (const t of [g.a, g.b]) {
       pairs++;
-      if (!C.night.partner[teamKey(t)]) freshNight++;
-      if (!C.all.partner[teamKey(t)]) freshEver++;
+      if (!C.night.partner[teamKey(t)]) freshPairs++;
     }
+    pn += W.partnerNight * (penNight(C.night.partner, teamKey(g.a), REF_P)
+                          + penNight(C.night.partner, teamKey(g.b), REF_P)) / 2;
+
+    const seenEver = C.all.match[matchKey(g.a, g.b)] || 0;
+    if (!seenEver) neverPlayed++;
+    ma += (W.matchAll || 0) * (2 * seenEver / (seenEver + 3));
+
+    const seenTonight = C.night.match[matchKey(g.a, g.b)] || 0;
+    if (seenTonight) repeats++;
+    rep += NIGHT_REPEAT_W * seenTonight * seenTonight;
   }
-  if (pairs) {
-    rows.push(["New partners tonight", `${freshNight} of ${pairs}`,
-      freshNight === pairs ? "all new" : ""]);
-    rows.push(["Never partnered before", `${freshEver} of ${pairs}`,
-      freshEver ? "first time" : ""]);
-  }
-  const unplayed = doubles.filter((g) => !C.all.match[matchKey(g.a, g.b)]).length;
-  if (doubles.length) {
-    rows.push(["Matchup never played", `${unplayed} of ${doubles.length}`,
-      unplayed === doubles.length ? "all new" : ""]);
-  }
+
+  const btb = BTB_W * (o.btb || 0);
+  const extra = o.extra || 0;
+  return {
+    comp, floor, pn, ma, rep, btb, extra,
+    total: comp + floor + pn + ma + rep + btb + extra,
+    doubles: doubles.length,
+    worstQ, freshPairs, pairs, neverPlayed, repeats,
+  };
+}
+
+/** Points, to the resolution the ranking actually turns on. */
+const cost2 = (x) => (Math.abs(x) < 0.005 ? "0" : x.toFixed(2));
+
+/** The setting behind a term, in the words the slider uses. */
+const wordFor = (v) => (v ? String(v) : "off");
+
+function detailsHTML(o, C, opts, n) {
+  const parts = costParts(o, C);
+  const lead = opts && opts.length ? costParts(opts[0], C) : parts;
+  const rows = [];
+
+  /* Each row is one line of the cost: what it was measured on, and the points
+   * it added. Every term is listed even at zero -- a preference contributing
+   * nothing is exactly what somebody checking "did my setting do anything"
+   * needs to see, and hiding the zeros would leave the totals unexplained. */
+  const floorTxt = S.minQ
+    ? (parts.worstQ >= S.minQ
+        ? "worst game " + parts.worstQ + ", clears " + S.minQ
+        : "worst game " + parts.worstQ + ", under " + S.minQ + " by "
+          + (S.minQ - parts.worstQ))
+    : "worst game " + parts.worstQ + ", no floor set";
+  rows.push(["Close games", S.minQ ? "floor " + S.minQ : "any",
+             floorTxt, parts.comp + parts.floor]);
+
+  rows.push(["New partners", wordFor(S.w.partnerNight),
+             parts.pairs
+               ? parts.freshPairs + " of " + parts.pairs + " pairs new tonight"
+               : "no pairs",
+             parts.pn]);
+
+  rows.push(["New games", wordFor(S.w.matchAll),
+             parts.doubles
+               ? parts.neverPlayed + " of " + parts.doubles + " never played before"
+               : "no games",
+             parts.ma]);
+
+  rows.push(["Same game twice", "always",
+             parts.repeats ? parts.repeats + " already played tonight"
+                           : "none repeated tonight",
+             parts.rep]);
 
   const sitting = o.rounds[0].sit;
-  rows.push(["Sitting", sitting.length ? sitting.join(", ") : "nobody",
-    sitting.filter((p) => C.lastSit.has(p)).length ? "sat last round too" : ""]);
+  rows.push(["Sitting twice", "always",
+             !sitting.length ? "nobody sits"
+               : o.btb ? sitting.filter((p) => C.lastSit.has(p)).join(", ")
+                         + " sat last round too"
+               : sitting.join(", ") + ", rested last round",
+             parts.btb]);
 
-  const counts = S.here.map((p) => C.played[p]);
-  rows.push(["Court time so far", `${Math.min(...counts)}\u2013${Math.max(...counts)} games`,
-    Math.max(...counts) - Math.min(...counts) <= 1 ? "even" : ""]);
-
-  const small = games.find(isSmall);
-  if (small) {
-    const who = playersOf(small);
-    const repeat = who.filter((p) => (C.smallCount[p] || 0) > 0);
-    rows.push([SMALL_LABEL[small.kind] === "singles" ? "Singles" : "Three-way",
-      who.join(", "),
-      repeat.length ? `${repeat.join(", ")} had one already` : "first tonight for all"]);
+  if (parts.extra) {
+    const small = o.rounds.flatMap((r) => r.games).find(isSmall);
+    rows.push(["Spare court", "always",
+               small ? SMALL_LABEL[small.kind] + ": "
+                       + playersOf(small).join(", ")
+                     : "a court stands empty",
+               parts.extra]);
   }
 
-  return `<table class="dtable">` + rows.map(([k, v, note]) =>
-    `<tr><th>${esc(k)}</th><td>${esc(v)}</td>` +
-    `<td class="dnote">${esc(note || "")}</td></tr>`).join("") + `</table>`;
+  const table = '<table class="dtable why"><thead><tr>'
+    + '<th>Preference</th><th>Set to</th><th>This plan</th><th class="dcost">Points</th>'
+    + '</tr></thead><tbody>'
+    + rows.map(([k, set, txt, c]) =>
+        '<tr class="' + (c > 0.005 ? "charged" : "free") + '">'
+        + '<th>' + esc(k) + '</th>'
+        + '<td class="dset">' + esc(set) + '</td>'
+        + '<td>' + esc(txt) + '</td>'
+        + '<td class="dcost">' + cost2(c) + '</td></tr>').join("")
+    + '</tbody><tfoot><tr><th>Total</th><td colspan="2">'
+    + (o.paired ? "both rounds together" : "lower is better, 0 is perfect")
+    + '</td><td class="dcost">' + cost2(parts.total) + '</td></tr></tfoot></table>';
+
+  /* Where it placed, and -- for the runners-up -- the single term that put it
+   * there. "Second because of new partners" is the answer to the question the
+   * ranking actually raises; a bare total is not. */
+  let place;
+  const gap = parts.total - lead.total;
+  /* Ties are common and worth saying out loud. Several arrangements scoring
+   * the same is the normal case early in a night, when nothing has been
+   * repeated yet and every pairing is fresh -- and "0 more than option 1" read
+   * as a rounding artefact rather than as the real answer, which is that the
+   * order between them carries no meaning. */
+  const tied = opts && opts.some((q, i) =>
+    i !== n && Math.abs(costParts(q, C).total - parts.total) < 0.005);
+  if (n === 0) {
+    place = (tied ? "Joint cheapest of the <b>" : "Cheapest of the <b>")
+      + (opts.considered || 0).toLocaleString() + "</b> arrangements compared."
+      + (tied ? " Nothing separates the top few on points, so the order among "
+              + "them is arbitrary — pick on the names." : "");
+  } else if (gap < 0.005) {
+    place = "Level with option 1 on points, and a different set of pairings. "
+      + "Nothing separates them — pick on the names.";
+  } else {
+    const terms = [
+      ["closer games", parts.comp + parts.floor - (lead.comp + lead.floor)],
+      ["repeat partners", parts.pn - lead.pn],
+      ["matchups played before", parts.ma - lead.ma],
+      ["a repeat of tonight", parts.rep - lead.rep],
+      ["somebody sitting twice", parts.btb - lead.btb],
+      ["the spare court", parts.extra - lead.extra],
+    ].sort((x, y) => y[1] - x[1]);
+    const worst = terms[0];
+    place = "<b>" + cost2(gap) + "</b> more than option 1"
+      + (worst && worst[1] > 0.005
+          ? ", mostly on " + worst[0] + " (" + cost2(worst[1]) + ")." : ".");
+  }
+  if (o.relaxed && o.relaxed.length) {
+    place += " Shown with " + o.relaxed.join(" and ") + " set aside "
+      + "— nothing else was available.";
+  }
+
+  /* What the score does not cover. Court time is a filter rather than a term:
+   * whoever has played least has to be on, so it never shows up as points. */
+  const counts = S.here.map((p) => C.played[p]);
+  const lo = Math.min(...counts), hi = Math.max(...counts);
+  const aside = (lo === hi
+      ? "Everyone here has played <b>" + lo + "</b> so far, so anyone can be "
+        + "picked this round."
+      : "Court time so far runs <b>" + lo + "–" + hi + "</b> games, and "
+        + "whoever is on <b>" + lo + "</b> has to be in this round.")
+    + " That is a rule rather than points, so it never appears above.";
+
+  return '<p class="dwhy">' + place + '</p>' + table
+    + '<p class="daside">' + aside + '</p>';
 }
 
 /* ------------------------------------------------------- 5 · where it reads
