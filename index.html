@@ -2826,10 +2826,23 @@ function renderSuggestions() {
        * working after the first round. */
       let round = nextRound();
       for (const r of o.rounds) {
-        r.games.forEach((g, i) => S.plan.push({
-          id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).slice(0, 8),
-          round, court: i + 1, a: g.a, b: g.b, sit: r.sit, sa: 0, sb: 0,
-        }));
+        r.games.forEach((g, i) => {
+          const rec = {
+            id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).slice(0, 8),
+            round, court: i + 1, a: g.a, b: g.b, sit: r.sit, sa: 0, sb: 0,
+          };
+          /* A small game has to arrive in the plan as a small game. Copying
+           * only a and b turned a suggested three-way into a doubles card
+           * whose third player simply vanished from the evening -- seven
+           * present, six on court -- and a singles into a doubles game with
+           * one player a side, which would then have been fitted into the
+           * ratings and written to the CSV as though it were one. */
+          if (isSmall(g)) {
+            rec.kind = g.kind;
+            if (g.c) { rec.c = g.c; rec.sc = 0; }
+          }
+          S.plan.push(rec);
+        });
         round++;
       }
       S.discarded = [];
@@ -3848,7 +3861,15 @@ function wire() {
     const g = S.plan.find((x) => x.id === el.dataset.g);
     if (!g) return;
     const v = parseInt(el.value.replace(/\D/g, ""), 10);
-    g[el.dataset.s === "a" ? "sa" : "sb"] = isNaN(v) ? 0 : Math.min(99, v);
+    /* The field carries the key it writes -- "sa", "sb", or "sc" for the third
+     * player in a three-way. This used to test that key against "a" and fall
+     * back to "sb", and since the key is never "a" the fallback was the only
+     * branch: every box on the card wrote the second team's score. Typing the
+     * winner's 11 into the top box put 11 on the bottom row, so the card
+     * reported the wrong side as having won and logged it that way. */
+    const key = el.dataset.s;
+    if (key !== "sa" && key !== "sb" && key !== "sc") return;
+    g[key] = isNaN(v) ? 0 : Math.min(99, v);
     save();
     refreshSave(g);            // repaint only the button, so the caret stays put
   });
@@ -3856,8 +3877,51 @@ function wire() {
     const el = e.target.closest(".sscore");
     if (el) el.select();
   });
+  /* Leaving a field only tidies that field.
+   *
+   * This used to redraw the whole slate, which destroyed the element focus was
+   * moving *to*: tapping the second score box fired focusout on the first,
+   * the cards were rebuilt, and the box under the thumb was replaced by a new
+   * node a moment after the browser had focused the old one. The tap went
+   * nowhere and the keystrokes with it. All the redraw was really for was
+   * showing the stored number back -- "1x1" as 11, an empty box as 0 -- and
+   * that is one assignment. The Save button is already kept current by
+   * refreshSave on every keystroke. */
   planHost.addEventListener("focusout", (e) => {
-    if (e.target.closest(".sscore")) renderPlan();
+    const el = e.target.closest(".sscore");
+    if (!el) return;
+    const g = S.plan.find((x) => x.id === el.dataset.g);
+    const key = el.dataset.s;
+    if (!g || !(key in g)) return;
+    el.value = g[key];                      // show the stored number back
+
+    /* The loser's score is the only one worth typing.
+     *
+     * Games go to 11, so one side of every final score is 11 and entering it
+     * is keystrokes spent on a foregone conclusion. The first score put on a
+     * card therefore fills the other side in: type the 7 and the 11 appears
+     * opposite. Type 11 first and nothing is filled -- that side is already
+     * the winner and the number still needed is the one you have not given.
+     *
+     * It fires once per game and then never again, so every later correction
+     * is the reader's own. Without that latch, fixing a mistyped 7 would
+     * re-fill a side that had since been edited on purpose.
+     *
+     * On leaving the field rather than on each keystroke, because "11" passes
+     * through "1" on the way to being typed, and a fill triggered by that
+     * intermediate reading would sit there as 11-11.
+     */
+    if (g.filled || g.c || !g[key]) return;   // done once; never a three-way
+    g.filled = 1;
+    const other = key === "sa" ? "sb" : "sa";
+    if (g[key] !== S.target && !g[other]) {
+      g[other] = S.target;
+      const oel = planHost.querySelector(
+        `.sscore[data-g="${g.id}"][data-s="${other}"]`);
+      if (oel) oel.value = g[other];          // in place: a redraw would take
+      save();                                 // the field being tapped with it
+      refreshSave(g);
+    }
   });
 
   $("#log").addEventListener("input", (e) => {
