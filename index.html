@@ -1549,6 +1549,244 @@ function rng(seed) {
 }
 
 
+/* Side-out scoring — a direct port of src/sideout.py.
+ *
+ * Traditional pickleball: only the serving team scores, each team gets two
+ * servers, and the team serving first in the game gets only one. That makes
+ * the point sequence a Markov chain over (score, serving team, server number)
+ * rather than a string of coin flips.
+ *
+ * Everything here is exact. Within a fixed score the four serve states form a
+ * 4x4 linear system (the serve can rotate without anyone scoring); the score
+ * lattice above it is a DAG and solves by backward substitution; the deuce
+ * region is translation-invariant and collapses to twelve unknowns.
+ *
+ * Verified against the Python implementation to 1e-12.
+ */
+
+const SO_A1 = 0, SO_A2 = 1, SO_B1 = 2, SO_B2 = 3;
+
+/** Gaussian elimination with partial pivoting. n is small (4 or 12). */
+function solve(M, rhs) {
+  const n = rhs.length;
+  const A = M.map((row, i) => row.concat([rhs[i]]));
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]];
+    const d = A[c][c];
+    for (let j = c; j <= n; j++) A[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = A[r][c];
+      if (f === 0) continue;
+      for (let j = c; j <= n; j++) A[r][j] -= f * A[c][j];
+    }
+  }
+  return A.map(row => row[n]);
+}
+
+function rallyProbs(p, serveEdge = 0) {
+  if (!serveEdge) return [p, p];
+  const lo = Math.log(p / (1 - p));
+  return [1 / (1 + Math.exp(-(lo + serveEdge))), 1 / (1 + Math.exp(-(lo - serveEdge)))];
+}
+
+/** P(A wins) from a deuce state, indexed [d+1][serveState] with d in {-1,0,1}. */
+function deuceValues(p, serveEdge = 0) {
+  const [pa, pb] = rallyProbs(p, serveEdge);
+  const idx = (d, s) => (d + 1) * 4 + s;
+  const M = Array.from({ length: 12 }, () => new Array(12).fill(0));
+  const rhs = new Array(12).fill(0);
+  // returns [nextDiff, absorbedValue]; one of the two is null
+  const scored = (d, byA) => {
+    const nd = d + (byA ? 1 : -1);
+    if (nd >= 2) return [null, 1];
+    if (nd <= -2) return [null, 0];
+    return [nd, null];
+  };
+  for (const d of [-1, 0, 1]) {
+    for (const s of [SO_A1, SO_A2, SO_B1, SO_B2]) {
+      const r = idx(d, s);
+      M[r][r] = 1;
+      if (s === SO_A1 || s === SO_A2) {
+        const [nd, val] = scored(d, true);
+        if (nd === null) rhs[r] += pa * val; else M[r][idx(nd, s)] -= pa;
+        M[r][idx(d, s === SO_A1 ? SO_A2 : SO_B1)] -= (1 - pa);
+      } else {
+        const [nd, val] = scored(d, false);
+        if (nd === null) rhs[r] += (1 - pb) * val; else M[r][idx(nd, s)] -= (1 - pb);
+        M[r][idx(d, s === SO_B1 ? SO_B2 : SO_A1)] -= pb;
+      }
+    }
+  }
+  const x = solve(M, rhs);
+  return [x.slice(0, 4), x.slice(4, 8), x.slice(8, 12)];
+}
+
+/**
+ * V[a][b][s] = P(team A wins) from score a-b with serve state s.
+ * Cached per (p, target, serveEdge) because the live board redraws often.
+ */
+const _tableCache = new Map();
+function soWinProbTable(p, target = 11, serveEdge = 0) {
+  const key = `${p.toFixed(6)}|${target}|${serveEdge}`;
+  const hit = _tableCache.get(key);
+  if (hit) return hit;
+
+  const [pa, pb] = rallyProbs(Math.min(Math.max(p, 1e-9), 1 - 1e-9), serveEdge);
+  const T = target;
+  const V = Array.from({ length: T + 1 }, () =>
+    Array.from({ length: T + 1 }, () => null));
+  const D = deuceValues(p, serveEdge);
+
+  for (let a = 0; a <= T; a++) {
+    for (let b = 0; b <= T; b++) {
+      if (a >= T && a - b >= 2) V[a][b] = [1, 1, 1, 1];
+      else if (b >= T && b - a >= 2) V[a][b] = [0, 0, 0, 0];
+      else if (a >= T - 1 && b >= T - 1) {
+        V[a][b] = D[Math.max(-1, Math.min(1, a - b)) + 1].slice();
+      }
+    }
+  }
+  for (let tot = 2 * T; tot >= 0; tot--) {
+    for (let a = Math.min(tot, T); a >= 0; a--) {
+      const b = tot - a;
+      if (b < 0 || b > T || V[a][b]) continue;
+      const nA = V[Math.min(a + 1, T)][b];
+      const nB = V[a][Math.min(b + 1, T)];
+      const M = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]];
+      const rhs = [0, 0, 0, 0];
+      rhs[SO_A1] = pa * nA[SO_A1];        M[SO_A1][SO_A2] -= (1 - pa);
+      rhs[SO_A2] = pa * nA[SO_A2];        M[SO_A2][SO_B1] -= (1 - pa);
+      rhs[SO_B1] = (1 - pb) * nB[SO_B1];  M[SO_B1][SO_B2] -= pb;
+      rhs[SO_B2] = (1 - pb) * nB[SO_B2];  M[SO_B2][SO_A1] -= pb;
+      V[a][b] = solve(M, rhs);
+    }
+  }
+  if (_tableCache.size > 60) _tableCache.clear();
+  _tableCache.set(key, V);
+  return V;
+}
+
+/**
+ * P(team A wins a game to `target`, win by 2).
+ * The team serving first gets only one server, so it starts in its *second*-
+ * server state — which, neatly, makes serving first worth exactly nothing.
+ */
+function soGameWinProb(p, target = 11, serveEdge = 0, firstServe = "split") {
+  const V = soWinProbTable(p, target, serveEdge);
+  if (firstServe === "A") return V[0][0][SO_A2];
+  if (firstServe === "B") return V[0][0][SO_B2];
+  return 0.5 * (V[0][0][SO_A2] + V[0][0][SO_B2]);
+}
+
+/** Inverse of soGameWinProb, by bisection. */
+function soInvertGameProb(pWin, target = 11, serveEdge = 0) {
+  let lo = 1e-4, hi = 1 - 1e-4;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (soGameWinProb(mid, target, serveEdge) < pWin) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+/** Points to spot the underdog to bring the game nearest a coin flip. */
+function soHandicap(p, target = 11, serveEdge = 0) {
+  let best = 0, bestErr = Infinity;
+  for (let h = 0; h <= target - 1; h++) {
+    const V = soWinProbTable(p, target, serveEdge);
+    const pw = p < 0.5 ? 0.5 * (V[h][0][SO_A2] + V[h][0][SO_B2])
+                       : 1 - 0.5 * (V[0][h][SO_A2] + V[0][h][SO_B2]);
+    const err = Math.abs(pw - 0.5);
+    if (err < bestErr) { bestErr = err; best = h; }
+  }
+  return best;
+}
+
+/**
+ * Where the next point goes, and in which serve state it leaves the game.
+ * Returns [FA, FB], each 4x4: F[s][s'] = P(the next point is scored by that
+ * team, and the state just after it is s' | the game is in state s now).
+ *
+ * The serve can rotate several times without anyone scoring, so this is not a
+ * single step: X = R + Q X, solved as (I - Q) X = R.
+ */
+function pointFlow(pa, pb) {
+  const zero = () => [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  const Q = zero(), RA = zero(), RB = zero();
+  RA[SO_A1][SO_A1] = pa;      Q[SO_A1][SO_A2] = 1 - pa;
+  RA[SO_A2][SO_A2] = pa;      Q[SO_A2][SO_B1] = 1 - pa;
+  RB[SO_B1][SO_B1] = 1 - pb;  Q[SO_B1][SO_B2] = pb;
+  RB[SO_B2][SO_B2] = 1 - pb;  Q[SO_B2][SO_A1] = pb;
+
+  const IQ = Q.map((row, i) => row.map((v, j) => (i === j ? 1 : 0) - v));
+  const apply = (R) => {
+    const X = zero();
+    for (let c = 0; c < 4; c++) {
+      const col = solve(IQ, [R[0][c], R[1][c], R[2][c], R[3][c]]);
+      for (let r = 0; r < 4; r++) X[r][c] = col[r];
+    }
+    return X;
+  };
+  return [apply(RA), apply(RB)];
+}
+
+/**
+ * Expected final score, [A, B], under side-out scoring.
+ *
+ * A forward pass over the score lattice: mass starts at 0-0 and moves one
+ * point at a time until it lands on a finished scoreline, where it is
+ * collected. Overtime is enumerated to `target - 1 + maxExtra` and the result
+ * is renormalised, so the sliver that runs past the cap biases nothing.
+ *
+ * The opening serve is split 50/50: the log does not record who served first,
+ * and the side that does gets only one server, which is why it is worth
+ * nothing either way.
+ */
+const _esCache = new Map();
+function soExpectedScore(p, target = 11, serveEdge = 0, maxExtra = 12) {
+  const key = `${p.toFixed(6)}|${target}|${serveEdge}|${maxExtra}`;
+  const hit = _esCache.get(key);
+  if (hit) return hit;
+
+  const [pa, pb] = rallyProbs(Math.min(Math.max(p, 1e-9), 1 - 1e-9), serveEdge);
+  const [FA, FB] = pointFlow(pa, pb);
+  const T = target, cap = T + maxExtra;
+  const pi = Array.from({ length: cap + 1 }, () =>
+    Array.from({ length: cap + 1 }, () => [0, 0, 0, 0]));
+  pi[0][0][SO_A2] = 0.5;
+  pi[0][0][SO_B2] = 0.5;
+  const over = (a, b) => (a >= T && a - b >= 2) || (b >= T && b - a >= 2);
+
+  let ea = 0, eb = 0, seen = 0;
+  for (let tot = 0; tot <= 2 * cap; tot++) {
+    for (let a = Math.min(tot, cap); a >= 0; a--) {
+      const b = tot - a;
+      if (b < 0 || b > cap) continue;
+      const v = pi[a][b];
+      const m = v[0] + v[1] + v[2] + v[3];
+      if (m <= 0) continue;
+      if (over(a, b)) { ea += a * m; eb += b * m; seen += m; continue; }
+      for (let s2 = 0; s2 < 4; s2++) {
+        let toA = 0, toB = 0;
+        for (let s = 0; s < 4; s++) {
+          toA += v[s] * FA[s][s2];
+          toB += v[s] * FB[s][s2];
+        }
+        if (a + 1 <= cap) pi[a + 1][b][s2] += toA;
+        if (b + 1 <= cap) pi[a][b + 1][s2] += toB;
+      }
+      pi[a][b] = [0, 0, 0, 0];
+    }
+  }
+  const out = seen > 0 ? [ea / seen, eb / seen] : [0, 0];
+  if (_esCache.size > 400) _esCache.clear();
+  _esCache.set(key, out);
+  return out;
+}
+
+
 /* Paddle Up — the courtside half of the Pickleball Almanac.
  *
  * Two jobs. Pick the next game, from who actually turned up and what the group
@@ -1559,9 +1797,11 @@ function rng(seed) {
  * differential on a +1/-1 team design matrix. A player's coefficient is the
  * points per game they add to their side, which makes a matchup's expected
  * margin just one team's two values minus the other's. Win probability is not
- * a second model -- the margin is pushed through the same exact race-to-11
- * mathematics the Almanac uses (pbmath.js, verified against the Python to
- * 1e-15), by solving for the per-rally probability that produces it.
+ * a second model -- the margin is pushed through the exact mathematics of a
+ * race to 11, by solving for the per-rally probability that produces it.
+ * That race is SIDE-OUT scoring, which is what this group plays: sideout.js,
+ * a Markov chain over (score, serving team, server number), verified against
+ * the Python to 1e-14.
  *
  * Data comes from the published sheet. A snapshot is baked in at build time so
  * the file works with no signal in a gym; on load it tries the live sheet and
@@ -1756,49 +1996,69 @@ function ratingSeries(games, players, w) {
   return out;
 }
 
-/* ---- margin <-> win probability, through the Almanac's rally mathematics --
- * The ridge predicts a point margin. gameWinProb needs a per-rally
- * probability, so this inverts the expected-score map: the p whose expected
- * scoreline differs by the predicted margin.
+/* ---- margin <-> win probability, through the side-out chain ---------------
+ * The ridge predicts a point margin; game quality needs a win probability.
  *
- * Done by bisection this cost ~1300 log-gamma evaluations per candidate
- * matchup, and the picker scores every candidate on every render -- tens of
- * milliseconds of arithmetic on a phone, per keystroke. expectedScore is
- * monotone in p, so one sampled table inverts by binary search instead, built
- * once per target. Sampling is denser near p = 0.5, where the margin curve is
- * steepest and most of the real matchups sit.
+ * This group plays SIDE-OUT scoring -- only the serving team scores, and each
+ * team gets two servers -- so both steps go through sideout.js, not through
+ * pbmath's iid-rally race. It is not a cosmetic difference. Side-out makes
+ * points streaky by construction (a serving team that wins a rally scores and
+ * keeps serving; a receiving team must win two rallies just to get the serve),
+ * which spreads the scoreline and amplifies a rally edge. Scored the rally way
+ * the same predicted margin reads as a *worse* game than it is -- 2 points of
+ * quality at the top of the range, ~10 through the middle.
+ *
+ * Solving the chain per candidate matchup would be far too slow: the picker
+ * scores every candidate on every render. Both the expected margin and the win
+ * probability are monotone in p, so one sampled table serves both directions
+ * by binary search, built once per target. Sampling is denser near p = 0.5,
+ * where the margin curve is steepest and where nearly every real matchup sits.
  */
 const _mTable = new Map();
 function marginTable(target) {
   let t = _mTable.get(target);
   if (t) return t;
-  const ps = [], ms = [];
+  const ps = [], ms = [], ws = [];
   for (let i = 0; i <= 256; i++) {
     const p = 0.5 + 0.4995 * Math.pow(i / 256, 1.4);
-    const e = expectedScore(p, target);
-    ps.push(p); ms.push(e[0] - e[1]);
+    const e = soExpectedScore(p, target);
+    ps.push(p); ms.push(e[0] - e[1]); ws.push(soGameWinProb(p, target));
   }
-  t = { ps, ms };
+  t = { ps, ms, ws };
   _mTable.set(target, t);
   return t;
 }
 
-function pFromMargin(m, target) {
-  const { ps, ms } = marginTable(target);
+/** Where a predicted margin falls in the sampled table: the bracketing pair
+ *  and how far between them, so either column can be read off it. */
+function atMargin(m, target) {
+  const { ms } = marginTable(target);
   const want = Math.abs(m);
   const last = ms.length - 1;
-  let p;
-  if (want >= ms[last]) p = ps[last];
-  else {
-    let lo = 0, hi = last;
-    while (hi - lo > 1) {
-      const mid = (lo + hi) >> 1;
-      if (ms[mid] < want) lo = mid; else hi = mid;
-    }
-    const span = ms[hi] - ms[lo];
-    p = span > 1e-12 ? ps[lo] + (want - ms[lo]) / span * (ps[hi] - ps[lo]) : ps[lo];
+  if (want >= ms[last]) return { lo: last, hi: last, f: 0 };
+  let lo = 0, hi = last;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (ms[mid] < want) lo = mid; else hi = mid;
   }
+  const span = ms[hi] - ms[lo];
+  return { lo, hi, f: span > 1e-12 ? (want - ms[lo]) / span : 0 };
+}
+
+/** The per-rally probability a predicted margin implies. */
+function pFromMargin(m, target) {
+  const { ps } = marginTable(target);
+  const { lo, hi, f } = atMargin(m, target);
+  const p = ps[lo] + f * (ps[hi] - ps[lo]);
   return m < 0 ? 1 - p : p;
+}
+
+/** P(the first side wins), read straight off a predicted margin. */
+function winProbFromMargin(m, target) {
+  const { ws } = marginTable(target);
+  const { lo, hi, f } = atMargin(m, target);
+  const w = ws[lo] + f * (ws[hi] - ws[lo]);
+  return m < 0 ? 1 - w : w;
 }
 
 /* ==================================================================== state */
@@ -2003,8 +2263,19 @@ const QUALITY_TIE = 0.8;
  * nearly free to honour. So it is a fixed weight rather than a slider: turning
  * "new games" off asks for repeats across the whole log, not for the same
  * match twice in an evening. Not a hard filter, because with four or five
- * present the repeats are forced arithmetically. */
-const NIGHT_REPEAT_W = 3.0;
+ * present the repeats are forced arithmetically.
+ *
+ * It has to outrank the all-time novelty term to mean that, and at 3.0 it did
+ * not: `ma` saturates at 2, so at the "Never seen it" preset (matchAll = 3)
+ * a never-played matchup was worth up to 6.0 -- more than the 3.0 charged for
+ * playing tonight's game again. The planner would then repeat a fresh matchup
+ * rather than reach for a well-worn one, which is the exact trade the
+ * paragraph above says it must not make. Switching the quality mathematics to
+ * side-out shifted the tiebreak just enough to expose it; the inversion was
+ * always there. 6.5 clears the 6.0 ceiling with a little room, and still sits
+ * under a bad game's floor penalty (up to ~10.9), so a forced repeat is still
+ * preferred to a genuinely lopsided game. */
+const NIGHT_REPEAT_W = 6.5;
 
 /* How far below the floor a game falls.
  *
@@ -2136,7 +2407,7 @@ function winProbOf(a, b) {
   const k = teamKey(a) + "#" + teamKey(b) + "#" + S.target;
   let v = _wpCache.get(k);
   if (v === undefined) {
-    v = gameWinProb(pFromMargin(marginOf(a, b), S.target), S.target);
+    v = winProbFromMargin(marginOf(a, b), S.target);
     if (_wpCache.size > 20000) _wpCache.clear();
     _wpCache.set(k, v);
   }
@@ -4191,8 +4462,7 @@ const orientByRate = (a, b, rate) =>
  */
 function matchupRow(pair, rate, games) {
   const { a, b } = orientByRate(pair.a, pair.b, rate);
-  const p = pFromMargin(marginOfRate(a, b, rate), S.target);
-  const winProb = gameWinProb(p, S.target);
+  const winProb = winProbFromMargin(marginOfRate(a, b, rate), S.target);
   const quality = Math.round(100 * (1 - 2 * Math.abs(winProb - 0.5)));
 
   const key = matchKey(a, b);
@@ -4298,8 +4568,9 @@ function renderFoot() {
     is one team&rsquo;s two values minus the other&rsquo;s.</p>
     <p><b>Game quality</b> is 100 for a coin flip and falls as the expected
     margin grows: that margin is pushed through the exact mathematics of a race
-    to ${S.target}, win by 2, and the resulting win probability is turned back
-    into a single number.</p>
+    to ${S.target}, win by 2, under <b>side-out</b> scoring &mdash; only the
+    serving team scores, each team gets two servers &mdash; and the resulting
+    win probability is turned back into a single number.</p>
     <p>Data: ${LOG.length} games through ${esc(lastDate())} &mdash;
     ${SOURCE === "none" ? "<b>no source set yet</b>" : `the <b>${SOURCE}</b> copy`}.
     Tonight&rsquo;s results count toward the ratings and the novelty counts as
