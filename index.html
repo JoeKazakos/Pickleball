@@ -3759,11 +3759,23 @@ function customState(c) {
 
 function renderCustom() {
   const host = $("#custom");
-  const known = rosterOf(allGames());
-  S.here.forEach((p) => { if (!known.includes(p)) known.push(p); });
+  const c = S.custom;
+
+  /* Only the people who are here tonight. This form is for a game that just
+   * finished on the court in front of you, so the whole historical roster is
+   * noise -- on a six-person night it made four dropdowns of eleven names.
+   * Anyone already picked stays on the list even if the roster has since
+   * dropped them, so a stray chip tap cannot silently blank a half-filled
+   * form. */
+  const known = S.here.slice();
+  c.p.forEach((p) => { if (p && !known.includes(p)) known.push(p); });
   known.sort();
 
-  const c = S.custom;
+  if (known.length < 4) {
+    host.innerHTML = `<p class="note">Pick who turned up and you can log a game here.</p>`;
+    return;
+  }
+
   const st = customState(c);
 
   const pick = (i) => `<select class="cpick" data-i="${i}"
