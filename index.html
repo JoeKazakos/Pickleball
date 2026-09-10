@@ -4793,6 +4793,17 @@ function wire() {
   });
 
   const customHost = $("#custom");
+
+  /* Repaint only the note and the Add button. A full renderCustom would
+   * replace the field being typed into, and take the caret with it. */
+  const refreshCustom = () => {
+    const st = customState(S.custom);
+    const btn = customHost.querySelector(".btn");
+    const note = customHost.querySelector(".cnote");
+    if (btn) btn.disabled = !st.ready;
+    if (note) note.textContent = st.note;
+  };
+
   customHost.addEventListener("change", (e) => {
     const el = e.target.closest(".cpick");
     if (!el) return;
@@ -4804,12 +4815,45 @@ function wire() {
     if (!el) return;
     S.custom[el.dataset.s] = el.value.replace(/\D/g, "").slice(0, 2);
     save();
-    // rebuild only the note and the button, so the field keeps its caret
-    const note = customHost.querySelector(".cnote");
-    const btn = customHost.querySelector(".btn");
-    const st = customState(S.custom);
-    if (btn) btn.disabled = !st.ready;
-    if (note) note.textContent = st.note;
+    refreshCustom();
+  });
+  customHost.addEventListener("focusin", (e) => {
+    const el = e.target.closest(".cscore");
+    if (el) el.select();
+  });
+  customHost.addEventListener("focusout", (e) => {
+    const el = e.target.closest(".cscore");
+    if (!el) return;
+    const c = S.custom;
+    const key = el.dataset.s;
+    el.value = c[key];        // show the stored digits back: "1x1" typed is 11
+
+    /* The same bargain the planned cards make. Games go to 11, so one side of
+     * every final score is a foregone conclusion and typing it is keystrokes
+     * spent on nothing. The first score entered fills the other side in: type
+     * the 7 and the 11 appears opposite. Type 11 first and nothing is filled
+     * -- that side has already won, and the number still wanted is the one not
+     * yet given.
+     *
+     * Latched to once per entry, so correcting a mistyped 7 later cannot
+     * re-fill a side that has since been set on purpose. On leaving the field
+     * rather than on each keystroke, because "11" passes through "1" on the
+     * way to being typed and a fill on that reading would sit there as 11-11.
+     *
+     * Unlike the planned cards this fires for a typed 0 as well. Those store
+     * scores as numbers, where an untouched box and a real 0 are both 0 and
+     * cannot be told apart, so they have to ignore both; these keep the raw
+     * digits, so an 0-11 drubbing gets the same help as any other score. */
+    if (c.filled || c[key] === "") return;
+    c.filled = 1;
+    const other = key === "sa" ? "sb" : "sa";
+    if (Number(c[key]) !== S.target && c[other] === "") {
+      c[other] = String(S.target);
+      const oel = customHost.querySelector(`.cscore[data-s="${other}"]`);
+      if (oel) oel.value = c[other];        // in place: a redraw would take the
+    }                                       // field being tapped with it
+    save();
+    refreshCustom();
   });
 
   $("#sourceToggle").onclick = () => { S.sourceOpen = !S.sourceOpen; save(); render(); };
