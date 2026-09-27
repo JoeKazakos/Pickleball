@@ -977,6 +977,14 @@ td .dot {
 .idelta.down b { color: var(--crit); }
 .idelta.dim { color: var(--ink-3); }
 
+/* the games before the chart's first point: listed, but set apart, because
+   they are fits on a handful of games and move far more than later ones */
+.isep {
+  padding: 7px 12px; background: var(--sunk); border-bottom: 1px solid var(--rule);
+  font-size: 11px; color: var(--ink-3); line-height: 1.35;
+}
+.irow.early .iteams { font-weight: 600; color: var(--ink-2); }
+
 /* ------------------------------------------------- the game-quality floor
    Closeness is a constraint rather than a weight: the slider says how bad a
    game you are willing to be offered, and anything below it is not shown. */
@@ -1288,7 +1296,8 @@ td .dot {
         The <b>out</b> row is the game that fell off the back of the window at the
         same moment &mdash; which is how someone who did not play can still move.
         The two add up to the step exactly. Hover the chart and the matching game
-        lights up.</p>
+        lights up. At the bottom are the games from before the chart starts, so
+        you can see where everyone&rsquo;s rating came from.</p>
         <div class="impact" id="impact"></div>
       </div>
     </div>
@@ -3960,7 +3969,7 @@ function renderRatings() {
   renderRange(full, series);
   drawChart(series, roster, games);
   ratingNote();
-  renderImpact(series, roster, games);
+  renderImpact(series, roster, games, full);
 }
 
 /** The visible slice of the fitted series, from the two range handles. */
@@ -4011,13 +4020,19 @@ function ratingNote() {
  * across the rated players is then subtracted, because one game cannot lift
  * everybody -- a rating is a comparison, and this is the same reason Form is
  * zero-sum.
+ *
+ * The table covers more of the log than the chart does. The chart holds off
+ * until its window is full, because a fit on a handful of games swings wildly;
+ * but what each of those early games did to the people in it is still worth
+ * seeing -- it is where every rating came from. So when the range reaches back
+ * to the first fitted point, the games before it are listed too, and in those
+ * a player is shown from their first game rather than their fourth.
  */
-const IMPACT_ROWS = 200;
-
-function renderImpact(series, roster, games) {
+function renderImpact(series, roster, games, full) {
   const host = $("#impact");
   host.innerHTML = "";
-  if (series.length < 2) {
+  const warmup = series.length && series[0] === full[0] ? series[0].i : 0;
+  if (series.length < 2 && !warmup) {
     host.innerHTML = `<p class="note">Not enough fitted games in this range.</p>`;
     $("#impactHead").textContent = "Game by game";
     return;
@@ -4025,18 +4040,21 @@ function renderImpact(series, roster, games) {
 
   const w = S.window;
   const rows = [];
-  for (let n = series.length - 1; n >= 0 && rows.length < IMPACT_ROWS; n--) {
-    const idx = series[n].i;
+  for (let n = series.length - 1; n >= -warmup; n--) {
+    // n below zero walks back through the games the chart does not draw
+    const early = n < 0;
+    const idx = early ? warmup + n : series[n].i;
     const g = games[idx];
     if (!g) continue;
     const from = w ? Math.max(0, idx - w + 1) : 0;
-    if (idx - from < MIN_IN_WINDOW) continue;
+    if (!early && idx - from < MIN_IN_WINDOW) continue;
+    const minG = early ? 1 : MIN_IN_WINDOW;
 
     const before = ridge(games.slice(from, idx), roster);
     const after = ridge(games.slice(from, idx + 1), roster);
     const rated = roster
       .map((p, i) => i)
-      .filter((i) => before.games[i] >= MIN_IN_WINDOW && after.games[i] >= MIN_IN_WINDOW);
+      .filter((i) => before.games[i] >= minG && after.games[i] >= minG);
     const centreOn = (vec) => {
       const mu = rated.length ? rated.reduce((t, i) => t + vec[i], 0) / rated.length : 0;
       return vec.map((v) => v - mu);
@@ -4045,10 +4063,9 @@ function renderImpact(series, roster, games) {
     const add = centreOn(roster.map((p, i) => after.beta[i] - before.beta[i]));
     const deltas = playersOf(g).map((p) => {
       const i = roster.indexOf(p);
-      if (i < 0 || after.games[i] < MIN_IN_WINDOW) return null;
+      if (i < 0 || after.games[i] < minG) return null;
       return { p, d: add[i] };
     }).filter(Boolean).sort((x, y) => y.d - x.d);
-
     /* The other half of the step.
      *
      * The line moves for two reasons at once: this game arrives, and the game
@@ -4058,7 +4075,7 @@ function renderImpact(series, roster, games) {
      * earlier, so `before` minus that point is exactly what leaving did.
      */
     let leaver = null;
-    const prev = series[n - 1];
+    const prev = early ? null : series[n - 1];
     if (w && prev && from > 0) {
       const gone = games[from - 1];
       const dropRaw = roster.map((p, i) => before.beta[i] - prev.beta[i]);
@@ -4071,16 +4088,16 @@ function renderImpact(series, roster, games) {
       if (gone && dd.length) leaver = { g: gone, date: gone.date, deltas: dd };
     }
 
-    rows.push({ i: idx, date: g.date, g, deltas, leaver });
+    rows.push({ i: idx, date: g.date, g, deltas, leaver, early });
   }
 
-  const total = series.length;
-  $("#impactHead").textContent = rows.length < total
-    ? `Game by game · last ${rows.length} of ${total}`
-    : `Game by game · ${rows.length}`;
+  $("#impactHead").textContent = `Game by game · ${rows.length}`;
 
-  host.innerHTML = rows.map((r) => `
-    <div class="irow" data-i="${r.i}">
+  const firstEarly = rows.findIndex((r) => r.early);
+  host.innerHTML = rows.map((r, k) => (k === firstEarly ? `
+    <div class="isep">Before the chart starts &middot; the first ${warmup} games,
+      while everyone&rsquo;s rating was still settling</div>` : "") + `
+    <div class="irow${r.early ? " early" : ""}" data-i="${r.i}">
       <div class="ihead">
         <span class="idate">${esc(r.date)}</span>
         <span class="iteams">${sidesOf(r.g).map((t) => esc(t.join(" & ")))
