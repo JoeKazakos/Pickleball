@@ -1259,6 +1259,20 @@ td .dot {
     </div>
 
     <div class="field">
+      <span class="flab" id="fadeLab">Fade</span>
+      <div class="seg" id="fadeSeg" role="group" aria-labelledby="fadeLab">
+        <button type="button" data-h="0" aria-pressed="true">Off</button>
+        <button type="button" data-h="20" aria-pressed="false">20</button>
+        <button type="button" data-h="50" aria-pressed="false">50</button>
+        <button type="button" data-h="100" aria-pressed="false">100</button>
+      </div>
+    </div>
+    <p class="note" style="margin:6px 0 14px">Fade counts recent games for more.
+    The number is a half-life: a game that many games back counts half, twice as
+    far back a quarter. It works inside the window &mdash; pick <b>All</b> to keep
+    every game in, just quieter with age.</p>
+
+    <div class="field">
       <span class="flab" id="linesLab">Lines</span>
       <div class="seg" id="modeSeg" role="group" aria-labelledby="linesLab">
         <button type="button" data-m="together" aria-pressed="true">Together</button>
@@ -1291,12 +1305,13 @@ td .dot {
 
       <div class="ratingside">
         <h2 id="impactHead">Game by game</h2>
-        <p class="note" style="margin-bottom:10px">Every step on the line has two
-        causes, and both are listed. The top row is what <b>adding</b> that game did.
-        The <b>out</b> row is the game that fell off the back of the window at the
-        same moment &mdash; which is how someone who did not play can still move.
-        The two add up to the step exactly. Hover the chart and the matching game
-        lights up. At the bottom are the games from before the chart starts, so
+        <p class="note" style="margin-bottom:10px">Every step on the line has more
+        than one cause, and each is listed. The top row is what <b>adding</b> that
+        game did. The <b>out</b> row is the game that fell off the back of the window
+        at the same moment &mdash; which is how someone who did not play can still
+        move. With <b>Fade</b> on, a <b>fade</b> row shows what the older games
+        counting a little less did. The parts add up to the step exactly. Hover the
+        chart and the matching game lights up. At the bottom are the games from before the chart starts, so
         you can see where everyone&rsquo;s rating came from.</p>
         <div class="impact" id="impact"></div>
       </div>
@@ -1939,26 +1954,32 @@ function solveLin(A, b) {
  * Returns coefficients and the games each player actually appears in, because
  * a player absent from the window is not rated 0 -- they are unrated, and the
  * chart has to break the line rather than draw them at average.
+ *
+ * `wts`, if given, weights each game's row (see fadeWeights). A player's game
+ * count is then the sum of their weights -- how many games' worth of evidence
+ * the fit actually has on them -- so a player seen only in long-faded games
+ * breaks the line exactly as one seen in too few games does.
  */
 const ALPHA = 0.5;
-function ridge(games, players) {
+function ridge(games, players, wts) {
   const k = players.length;
   const ix = Object.fromEntries(players.map((p, i) => [p, i]));
   const XtX = Array.from({ length: k }, () => new Array(k).fill(0));
   const Xty = new Array(k).fill(0);
   const seen = new Array(k).fill(0);
 
-  for (const g of games) {
+  games.forEach((g, n) => {
+    const wt = wts ? wts[n] : 1;
     const row = [];
     g.a.forEach((p) => { if (p in ix) row.push([ix[p], 1]); });
     g.b.forEach((p) => { if (p in ix) row.push([ix[p], -1]); });
     const y = g.sa - g.sb;
     for (const [i, si] of row) {
-      seen[i]++;
-      Xty[i] += si * y;
-      for (const [j, sj] of row) XtX[i][j] += si * sj;
+      seen[i] += wt;
+      Xty[i] += wt * si * y;
+      for (const [j, sj] of row) XtX[i][j] += wt * si * sj;
     }
-  }
+  });
   for (let i = 0; i < k; i++) XtX[i][i] += ALPHA;
   return { beta: solveLin(XtX, Xty), games: seen, players };
 }
@@ -1986,9 +2007,24 @@ function centred(fit, minGames) {
   return fit.beta.map((b) => b - mu);
 }
 
-/** Rating at every point in the log, on a trailing window. w = 0 means all. */
+/**
+ * Weights for games[from, from + n), seen from game `now`: 1 for game `now`,
+ * halving every h games further back. h = 0 means no fading -- no weights.
+ *
+ * The window is a hard edge: a game counts fully until it is w games old, then
+ * not at all, and the day it drops off the line jumps for a reason that has
+ * nothing to do with anyone's form. Fading lets recent games lead without that
+ * cliff, and on the whole log it keeps every game in, just quieter with age.
+ */
+function fadeWeights(from, n, now, h) {
+  if (!h) return undefined;
+  return Array.from({ length: n }, (_, j) => Math.pow(0.5, (now - from - j) / h));
+}
+
+/** Rating at every point in the log, on a trailing window. w = 0 means all;
+ *  h is the fade's half-life in games, 0 for none. */
 const MIN_IN_WINDOW = 4;
-function ratingSeries(games, players, w) {
+function ratingSeries(games, players, w, h = 0) {
   const out = [];
   // Nothing is drawn until the window is actually full. The first games of a
   // 40-game window are a fit on 8 games wearing a 40-game label, and they
@@ -1996,7 +2032,7 @@ function ratingSeries(games, players, w) {
   const need = w ? w : 40;
   for (let t = need; t <= games.length; t++) {
     const from = w ? Math.max(0, t - w) : 0;
-    const fit = ridge(games.slice(from, t), players);
+    const fit = ridge(games.slice(from, t), players, fadeWeights(from, t - from, t - 1, h));
     out.push({
       i: t - 1, t: games[t - 1].t, date: games[t - 1].date,
       beta: centred(fit, MIN_IN_WINDOW), games: fit.games,
@@ -2101,6 +2137,7 @@ const S = {
   plan: [],            // upcoming games: {id, round, court, a, b, sit, sa, sb}
   games: [],           // played tonight: {a, b, sa, sb, sit}
   window: 40,
+  fade: 0,             // half-life in games for down-weighting old ones; 0 = off
   shown: [],           // players selected in the chart
   chartMode: "separate",  // "together" | "separate"; the default before anyone
                           // has touched the toggle
@@ -2129,7 +2166,7 @@ function forgetPeople() {
 }
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
-                 "plan", "games", "window", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
+                 "plan", "games", "window", "fade", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
                  "srcKey", "theme", "skin", "lookOpen", "matchupSel"];
 
 function save() {
@@ -3933,6 +3970,8 @@ function renderRatings() {
 
   $$("#winSeg button").forEach((b) =>
     b.setAttribute("aria-pressed", Number(b.dataset.w) === S.window ? "true" : "false"));
+  $$("#fadeSeg button").forEach((b) =>
+    b.setAttribute("aria-pressed", Number(b.dataset.h) === S.fade ? "true" : "false"));
   $$("#modeSeg button").forEach((b) =>
     b.setAttribute("aria-pressed", b.dataset.m === chartMode() ? "true" : "false"));
 
@@ -3964,7 +4003,7 @@ function renderRatings() {
     host.appendChild(b);
   }
 
-  const full = ratingSeries(games, roster, S.window);
+  const full = ratingSeries(games, roster, S.window, S.fade);
   const series = sliceRange(full);
   renderRange(full, series);
   drawChart(series, roster, games);
@@ -3998,11 +4037,15 @@ function renderRange(full, shown) {
 function ratingNote() {
   const off = rosterOf(LOG).filter((p) => !CHARTABLE.includes(p));
   const w = S.window ? `last ${S.window} games` : "whole log";
+  const h = S.fade
+    ? `, with older games fading &mdash; a game <b>${S.fade} games back counts half</b>, ` +
+      `${S.fade * 2} back a quarter`
+    : "";
   $("#ratingNote").innerHTML =
-    `Points per game added to your team, refitted over the <b>${w}</b> after ` +
-    `every game. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
-    `games inside the window &mdash; ridge would pull them to zero, which reads as ` +
-    `"average" when it means "wasn't there".` +
+    `Points per game added to your team, refitted after every game over the ` +
+    `<b>${w}</b>${h}. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
+    `games${S.fade ? "&rsquo; worth of weight" : ""} inside the window &mdash; ridge would ` +
+    `pull them to zero, which reads as "average" when it means "wasn't there".` +
     (off.length ? ` Not plotted: <b>${esc(off.join(", "))}</b>, under ${chartMinGames()} ` +
       `games in the log.` : "");
 }
@@ -4021,6 +4064,10 @@ function ratingNote() {
  * everybody -- a rating is a comparison, and this is the same reason Form is
  * zero-sum.
  *
+ * With fading on, "before" is weighted as seen from the new game, so it too
+ * differs from "after" by that one game and nothing else. Everything a step of
+ * age does to the older games lands in the other half, below.
+ *
  * The table covers more of the log than the chart does. The chart holds off
  * until its window is full, because a fit on a handful of games swings wildly;
  * but what each of those early games did to the people in it is still worth
@@ -4038,7 +4085,7 @@ function renderImpact(series, roster, games, full) {
     return;
   }
 
-  const w = S.window;
+  const w = S.window, h = S.fade;
   const rows = [];
   for (let n = series.length - 1; n >= -warmup; n--) {
     // n below zero walks back through the games the chart does not draw
@@ -4050,8 +4097,8 @@ function renderImpact(series, roster, games, full) {
     if (!early && idx - from < MIN_IN_WINDOW) continue;
     const minG = early ? 1 : MIN_IN_WINDOW;
 
-    const before = ridge(games.slice(from, idx), roster);
-    const after = ridge(games.slice(from, idx + 1), roster);
+    const before = ridge(games.slice(from, idx), roster, fadeWeights(from, idx - from, idx, h));
+    const after = ridge(games.slice(from, idx + 1), roster, fadeWeights(from, idx - from + 1, idx, h));
     const rated = roster
       .map((p, i) => i)
       .filter((i) => before.games[i] >= minG && after.games[i] >= minG);
@@ -4073,22 +4120,42 @@ function renderImpact(series, roster, games, full) {
      * play can still rise, which is baffling unless it is shown. It costs no
      * extra work: the previous fitted point is the same window one game
      * earlier, so `before` minus that point is exactly what leaving did.
+     *
+     * Fading adds a third part: every older game is now one step further back,
+     * so counts a little less, and that moves people who were nowhere near
+     * tonight. When a game also leaves, one more fit -- this window, weighted
+     * as of the previous game -- separates the two, so the parts still add up
+     * to the step exactly.
      */
-    let leaver = null;
+    let leaver = null, faded = null;
     const prev = early ? null : series[n - 1];
-    if (w && prev && from > 0) {
-      const gone = games[from - 1];
-      const dropRaw = roster.map((p, i) => before.beta[i] - prev.beta[i]);
-      const drop = centreOn(dropRaw);
-      const dd = gone ? playersOf(gone).map((p) => {
-        const i = roster.indexOf(p);
-        if (i < 0 || prev.games[i] < MIN_IN_WINDOW) return null;
-        return { p, d: drop[i] };
-      }).filter(Boolean).sort((x, y) => y.d - x.d) : [];
-      if (gone && dd.length) leaver = { g: gone, date: gone.date, deltas: dd };
+    const leaves = w && prev && from > 0;
+    if (prev && (leaves || h)) {
+      const mid = leaves && h
+        ? ridge(games.slice(from, idx), roster, fadeWeights(from, idx - from, idx - 1, h))
+        : null;
+      const outEnd = leaves ? (mid || before) : prev;   // prev -> outEnd: the leaver
+      if (leaves) {
+        const gone = games[from - 1];
+        const drop = centreOn(roster.map((p, i) => outEnd.beta[i] - prev.beta[i]));
+        const dd = gone ? playersOf(gone).map((p) => {
+          const i = roster.indexOf(p);
+          if (i < 0 || prev.games[i] < MIN_IN_WINDOW) return null;
+          return { p, d: drop[i] };
+        }).filter(Boolean).sort((x, y) => y.d - x.d) : [];
+        if (gone && dd.length) leaver = { g: gone, date: gone.date, deltas: dd };
+      }
+      if (h) {
+        // outEnd -> before: the older games aging one step. Everyone rated
+        // moves, so everyone who moved visibly is listed.
+        const age = centreOn(roster.map((p, i) => before.beta[i] - outEnd.beta[i]));
+        const fd = rated.map((i) => ({ p: roster[i], d: age[i] }))
+          .filter((x) => Math.abs(x.d) >= 0.005).sort((x, y) => y.d - x.d);
+        if (fd.length) faded = { deltas: fd };
+      }
     }
 
-    rows.push({ i: idx, date: g.date, g, deltas, leaver, early });
+    rows.push({ i: idx, date: g.date, g, deltas, leaver, faded, early });
   }
 
   $("#impactHead").textContent = `Game by game · ${rows.length}`;
@@ -4116,6 +4183,15 @@ function renderImpact(series, roster, games, full) {
           <span class="iscore">${scoresOf(r.leaver.g).join("\u2013")}</span>
         </div>
         <div class="ideltas">${r.leaver.deltas.map((d) =>
+          `<span class="idelta ${d.d >= 0 ? "up" : "down"}">${esc(d.p)} ` +
+          `<b>${signed(d.d, 2)}</b></span>`).join("")}</div>
+      </div>` : ""}
+      ${r.faded ? `<div class="ileft">
+        <div class="ihead">
+          <span class="idate">fade</span>
+          <span class="iteams"><i>older games each count a little less</i></span>
+        </div>
+        <div class="ideltas">${r.faded.deltas.map((d) =>
           `<span class="idelta ${d.d >= 0 ? "up" : "down"}">${esc(d.p)} ` +
           `<b>${signed(d.d, 2)}</b></span>`).join("")}</div>
       </div>` : ""}
@@ -4193,6 +4269,7 @@ function drawChart(series, roster, games) {
   const mode = chartMode();
   $("#figCap").textContent =
     `Points per game added to your team · ${S.window ? "trailing " + S.window + " games" : "whole log"}`
+    + (S.fade ? ` · half-life ${S.fade} games` : "")
     + (mode === "separate"
         ? ` · one panel each, shared scale ${signed(data.lo, 0)} to ${signed(data.hi, 0)}`
         : S.shown.length > OVERLAY_MAX ? " · labelled at the line ends" : "");
@@ -4694,6 +4771,9 @@ function wire() {
   });
   $$("#winSeg button").forEach((b) => {
     b.onclick = () => { S.window = Number(b.dataset.w); save(); renderRatings(); renderMeta(); };
+  });
+  $$("#fadeSeg button").forEach((b) => {
+    b.onclick = () => { S.fade = Number(b.dataset.h); save(); renderRatings(); };
   });
   $$("#modeSeg button").forEach((b) => {
     b.onclick = () => { S.chartMode = b.dataset.m; save(); renderRatings(); };
