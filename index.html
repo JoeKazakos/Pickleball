@@ -642,6 +642,39 @@ select, input[type="text"] {
 .optacts .btn { flex: 1; }
 .optacts .btn.ghost { flex: 0 0 auto; }
 
+/* ------------------------------------------------------------ plan ahead
+   One strip above the options: how many rounds, and a button that queues the
+   top suggestion that many times. Same card surface as an option, no number
+   column, so it reads as a control rather than as a fourth suggestion. */
+.batch {
+  background: var(--card); border: 1px solid var(--rule); border-radius: var(--r);
+  padding: 10px 12px 11px; margin-bottom: 12px;
+}
+.batchrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.batchrow .flab {
+  font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-3); font-weight: 800;
+}
+.stepper {
+  display: inline-flex; align-items: stretch;
+  border: 1.5px solid var(--rule-2); border-radius: 999px; overflow: hidden;
+}
+.stepper button {
+  font: inherit; font-weight: 700; font-size: 19px; line-height: 1;
+  min-width: 44px; min-height: 44px; padding: 0;
+  border: 0; background: var(--card); color: var(--ink); cursor: pointer;
+}
+/* same rule as .btn:disabled -- a surface of its own, not a fade */
+.stepper button:disabled { cursor: not-allowed; background: var(--sunk); color: var(--ink-2); }
+.stepper output {
+  display: grid; place-items: center; min-width: 2.6em;
+  font-family: var(--mono); font-weight: 700; font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  border-left: 1.5px solid var(--rule-2); border-right: 1.5px solid var(--rule-2);
+}
+.batchrow .btn { flex: 1 1 auto; }
+.batch .note { margin-top: 8px; font-size: 12.5px; }
+
 /* ================================================================== charts */
 .figure { margin: 16px 0 18px; }
 .figure figcaption {
@@ -1166,6 +1199,19 @@ td .dot {
   <section id="sugSec">
     <h2 id="sugHead">Suggestions</h2>
     <p class="note" id="sugNote" style="margin-bottom:12px"></p>
+    <!-- several at once: the top suggestion, n deep -->
+    <div class="batch hidden" id="batch">
+      <div class="batchrow">
+        <span class="flab" id="batchLab">Plan ahead</span>
+        <div class="stepper" role="group" aria-labelledby="batchLab">
+          <button type="button" id="batchLess" aria-label="One fewer">&minus;</button>
+          <output id="batchN" aria-live="polite">6</output>
+          <button type="button" id="batchMore" aria-label="One more">+</button>
+        </div>
+        <button type="button" class="btn small" id="batchGo">Plan 6 games</button>
+      </div>
+      <p class="note" id="batchNote"></p>
+    </div>
     <div id="suggestions"></div>
   </section>
 
@@ -2153,6 +2199,7 @@ const S = {
   srcKey: "",          // which log the people below belong to
   matchupSel: [],      // players picked in the Matchups tab -- a matchup shows
                        // only if every one of them is in it, either side
+  batchN: 6,           // how many rounds "Plan ahead" queues in one tap
 };
 
 /* Anything that is about *these* people, as opposed to how the reader likes
@@ -2167,7 +2214,7 @@ function forgetPeople() {
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
                  "plan", "games", "window", "fade", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
-                 "srcKey", "theme", "skin", "lookOpen", "matchupSel"];
+                 "srcKey", "theme", "skin", "lookOpen", "matchupSel", "batchN"];
 
 function save() {
   try {
@@ -2870,6 +2917,64 @@ function suggestions(limit = 3) {
   return picked;
 }
 
+/** Put a suggestion's rounds on the end of the plan. */
+function planRounds(rounds) {
+  /* Round ids have to keep climbing across the whole night. Counting from
+   * the plan alone restarted them at 1 every time the queue emptied, and
+   * then lastPlayedRound() matched every game ever played, so "who sat last
+   * round" came back as nobody and the back-to-back guard quietly stopped
+   * working after the first round. */
+  let round = nextRound();
+  for (const r of rounds) {
+    r.games.forEach((g, i) => {
+      const rec = {
+        id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).slice(0, 8),
+        round, court: i + 1, a: g.a, b: g.b, sit: r.sit, sa: 0, sb: 0,
+      };
+      /* A small game has to arrive in the plan as a small game. Copying
+       * only a and b turned a suggested three-way into a doubles card
+       * whose third player simply vanished from the evening -- seven
+       * present, six on court -- and a singles into a doubles game with
+       * one player a side, which would then have been fitted into the
+       * ratings and written to the CSV as though it were one. */
+      if (isSmall(g)) {
+        rec.kind = g.kind;
+        if (g.c) { rec.c = g.c; rec.sc = 0; }
+      }
+      S.plan.push(rec);
+    });
+    round++;
+  }
+}
+
+/**
+ * Several rounds in one go: the top suggestion, then the top suggestion with
+ * that one queued, and so on -- exactly what tapping "Plan this game" n times
+ * does, without the n taps. Each pick sees the ones before it, because planned
+ * games count as played, so court time stays level and the novelty terms and
+ * the night-repeat charge all see the batch as it grows.
+ *
+ * A paired suggestion (exactly 8k here) is two rounds. Its second half is left
+ * off when it would overshoot n, which costs nothing: court time forces those
+ * four on next anyway, and the next "Plan ahead" will pick them up.
+ *
+ * Returns how many rounds actually went in, which is fewer than n only if the
+ * suggestions run dry.
+ */
+function planAhead(n) {
+  let added = 0;
+  while (added < n) {
+    // three, not one, so the pick is the same option 1 the screen would show
+    const o = suggestions(3)[0];
+    if (!o) break;
+    const take = o.rounds.slice(0, n - added);
+    planRounds(take);
+    added += take.length;
+    S.discarded = [];        // a turned-down option only applies to the first pick
+  }
+  return added;
+}
+
 /* ================================================================ helpers */
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -2965,6 +3070,7 @@ function renderTonight() {
   renderPrefs();
   renderPlan();
   renderSuggestions();
+  renderBatch();
   renderPlayed();
   renderCustom();
   renderLook();
@@ -3219,6 +3325,33 @@ function renderPlan() {
     });
     host.appendChild(wrap);
   });
+
+  /* Plan ahead queues six games in one tap, and taking them back should not
+   * be six more. It is also the way to re-plan: a queue built before someone
+   * arrived does not have them in it, because court time only reaches rounds
+   * suggested after the queue. What is on court stays, and so does anything
+   * with a score typed into it. */
+  const queued = rounds.slice(1).flatMap((r) => r.games)
+    .filter((g) => !scoresOf(g).some((v) => v));
+  if (queued.length >= 2) {
+    const row = document.createElement("div");
+    row.className = "btn-row";
+    const clr = document.createElement("button");
+    clr.className = "btn small ghost"; clr.type = "button";
+    clr.id = "planClear";
+    clr.textContent = `Clear the queue (${queued.length})`;
+    clr.onclick = async () => {
+      if (!await ask(`Take the ${queued.length} queued games off the plan? `
+        + `The ${k > 1 ? "round" : "game"} on court stays.`, "Clear")) return;
+      const gone = new Set(queued.map((g) => g.id));
+      S.plan = S.plan.filter((g) => !gone.has(g.id));
+      S.discarded = [];
+      save(); render();
+      toast(`${queued.length} queued games cleared`);
+    };
+    row.appendChild(clr);
+    host.appendChild(row);
+  }
 }
 
 /** A small game is done when someone has reached the target outright: singles
@@ -3415,32 +3548,7 @@ function renderSuggestions() {
     add.type = "button";
     add.textContent = nGames > 1 ? `Plan these ${nGames}` : "Plan this game";
     add.onclick = () => {
-      /* Round ids have to keep climbing across the whole night. Counting from
-       * the plan alone restarted them at 1 every time the queue emptied, and
-       * then lastPlayedRound() matched every game ever played, so "who sat last
-       * round" came back as nobody and the back-to-back guard quietly stopped
-       * working after the first round. */
-      let round = nextRound();
-      for (const r of o.rounds) {
-        r.games.forEach((g, i) => {
-          const rec = {
-            id: (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())).slice(0, 8),
-            round, court: i + 1, a: g.a, b: g.b, sit: r.sit, sa: 0, sb: 0,
-          };
-          /* A small game has to arrive in the plan as a small game. Copying
-           * only a and b turned a suggested three-way into a doubles card
-           * whose third player simply vanished from the evening -- seven
-           * present, six on court -- and a singles into a doubles game with
-           * one player a side, which would then have been fitted into the
-           * ratings and written to the CSV as though it were one. */
-          if (isSmall(g)) {
-            rec.kind = g.kind;
-            if (g.c) { rec.c = g.c; rec.sc = 0; }
-          }
-          S.plan.push(rec);
-        });
-        round++;
-      }
+      planRounds(o.rounds);
       S.discarded = [];
       save(); render();
       toast(nGames > 1 ? `${nGames} games planned` : "Game planned");
@@ -3463,6 +3571,32 @@ function renderSuggestions() {
     card.appendChild(acts);
     host.appendChild(card);
   });
+}
+
+/* --------------------------------------------------------- plan ahead */
+
+const BATCH_MAX = 20;
+
+/** The strip that plans several at once. It counts rounds, which with one
+ *  court in use is the same thing as games -- and says games when it is. */
+function renderBatch() {
+  const live = LOG.length > 0 && S.here.length >= 4;
+  $("#batch").classList.toggle("hidden", !live);
+  if (!live) return;
+  S.batchN = Math.max(1, Math.min(BATCH_MAX, Math.round(S.batchN) || 6));
+  const n = S.batchN, per = courtsInUse();
+  const unit = (per > 1 ? "round" : "game") + (n === 1 ? "" : "s");
+  $("#batchN").textContent = n;
+  $("#batchLess").disabled = n <= 1;
+  $("#batchMore").disabled = n >= BATCH_MAX;
+  $("#batchLess").setAttribute("aria-label", `One fewer ${per > 1 ? "round" : "game"}`);
+  $("#batchMore").setAttribute("aria-label", `One more ${per > 1 ? "round" : "game"}`);
+  $("#batchGo").textContent = `Plan ${n} ${unit}`;
+  const q = S.plan.length;
+  $("#batchNote").textContent =
+    (per > 1 ? `Up to ${per} games a round. ` : "")
+    + `For the ${S.here.length} here, each one the top suggestion given the ones before it`
+    + (q ? ` — added after the ${q} already planned.` : ".");
 }
 
 /**
@@ -4769,6 +4903,26 @@ function wire() {
   $$("#courtSeg button").forEach((b) => {
     b.onclick = () => { S.courts = Number(b.dataset.c); S.discarded = []; save(); render(); };
   });
+
+  const stepBatch = (d) => { S.batchN += d; renderBatch(); save(); };
+  $("#batchLess").onclick = () => stepBatch(-1);
+  $("#batchMore").onclick = () => stepBatch(1);
+  $("#batchGo").onclick = () => {
+    const before = S.plan.length, multi = courtsInUse() > 1;
+    const rounds = planAhead(S.batchN);
+    const games = S.plan.length - before;
+    save(); render();
+    if (!games) return toast("Nothing left to suggest");
+    const s = (x) => (x === 1 ? "" : "s");
+    toast(multi ? `${rounds} round${s(rounds)} planned — ${games} games`
+                : `${games} game${s(games)} planned`);
+    /* The plan sits above this strip, so it grows out of sight and the page
+     * stays put. Bring its top into view, under the sticky header, so the
+     * batch can be checked straight away. */
+    const top = $("#planSec").getBoundingClientRect().top + window.scrollY
+      - $(".top").offsetHeight - 8;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  };
   $$("#winSeg button").forEach((b) => {
     b.onclick = () => { S.window = Number(b.dataset.w); save(); renderRatings(); renderMeta(); };
   });
