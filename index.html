@@ -361,7 +361,6 @@ section.first { border-top: 0; }
   border-radius: var(--r); box-shadow: var(--shadow);
   padding: 10px 12px 12px; margin-bottom: 10px;
 }
-.round.now .slate { box-shadow: var(--lift); border-color: var(--rule-2); }
 
 .slatehead {
   display: flex; align-items: baseline; gap: 10px;
@@ -762,10 +761,6 @@ td .dot {
   font-size: 11.5px; font-weight: 800; letter-spacing: .09em;
   text-transform: uppercase; color: var(--ink-2);
 }
-.round.now .roundhead > span:first-child {
-  color: var(--on-court); background: var(--court-solid);
-  padding: 3px 8px; border-radius: 999px;
-}
 .roundsit {
   font-size: 12.5px; color: var(--ink-3); margin-left: auto;
   font-family: var(--mono);
@@ -802,8 +797,6 @@ td .dot {
 .qnum.mid { color: var(--ink); }
 .qnum.lo  { color: var(--ink-3); }
 
-/* later rounds sit flatter, so the game on court still reads first */
-.slate.later { box-shadow: none; background: transparent; border-style: dashed; }
 
 /* ------------------------------------------------------- an unplanned game */
 .cteam {
@@ -1189,7 +1182,7 @@ td .dot {
     </div>
   </section>
 
-  <!-- on court now, and queued behind it -->
+  <!-- every planned game, any of which can be played next -->
   <section id="planSec" class="hidden">
     <h2 id="planHead">Planned</h2>
     <div id="plan"></div>
@@ -2259,9 +2252,20 @@ function restore() {
      * "nothing yet" as a mismatch and throw away the roster, the queue and
      * everything played. So only a key naming a genuinely different source
      * forgets anybody. */
+    /* The one other key that is genuinely "the same log": the address this
+     * page is about to load. loadSource() writes srcKey = that address once a
+     * fetch lands, so on every later open the stored key is the live address
+     * and the baked-in one differs from it -- which read as "a different log"
+     * and wiped the roster, the plan and tonight's games on every reload of a
+     * page opened with a ?csv= link or a saved source. That is the phone
+     * coming back from sleep losing the night. It is not adopted early: srcKey
+     * only keeps its stored value, it is never set to a link that has not
+     * been seen to load. */
     const had = v.srcKey || "";
-    if (had && had !== baked) forgetPeople();
-    S.srcKey = baked;
+    const pending = linkSource() || S.sourceUrl || "";
+    const same = !!had && had === pending;
+    if (had && had !== baked && !same) forgetPeople();
+    S.srcKey = same ? had : baked;
   } catch (e) {
     S.srcKey = baked;
   }
@@ -3143,6 +3147,12 @@ function renderRoster() {
           + `${g.a.join(" & ")} ${g.sa}\u2013${g.sb} ${g.b.join(" & ")}. `
           + `Take ${p} out and lose it?`, "Remove " + p)) return;
       }
+      if (!scored.length && doomed.length) {
+        // a mis-tap on a name should not quietly eat the queue
+        if (!await ask(`${p} is in ${doomed.length} planned game`
+          + `${doomed.length === 1 ? "" : "s"}. Take ${p} out and drop `
+          + `${doomed.length === 1 ? "it" : "them"}?`, "Remove " + p)) return;
+      }
       S.here = next;
       S.discarded = [];
       dropUnplayablePlan();
@@ -3258,18 +3268,16 @@ function renderPlan() {
 
   rounds.forEach((r, ri) => {
     const wrap = document.createElement("div");
-    wrap.className = "round" + (ri === 0 ? " now" : "");
+    wrap.className = "round";
     const sit = S.here.filter((p) => !r.games.some(
       (g) => playersOf(g).includes(p)));
     wrap.innerHTML = `<div class="roundhead">
-        <span>${ri === 0 ? `On court now · to ${S.target}` : `Up next · round ${ri + 1}`}</span>
+        <span>${k > 1 ? `Round ${ri + 1} · to ${S.target}` : `Game ${ri + 1} · to ${S.target}`}</span>
         ${sit.length ? `<span class="roundsit">sitting ${esc(sit.join(", "))}</span>` : ""}
       </div>`;
 
-    /* Every pending game can be scored, not only the round on court: games
-     * get played out of order, and a slate that refuses the score of the game
-     * that actually finished is no use. Later rounds sit flatter and drop the
-     * column caption, so the one on court still reads first. */
+    /* Every planned game is equal: any of them can be played next, so any of
+     * them can be scored. There is no "now playing" game, only the plan. */
     r.games.forEach((g) => {
       const sides = sidesOf(g), scores = scoresOf(g);
       const small = isSmall(g);
@@ -3278,13 +3286,13 @@ function renderPlan() {
       const q = small ? null : qualityOf(g);
       const band = q === null ? "" : q >= 80 ? "hi" : q >= 55 ? "mid" : "lo";
       const card = document.createElement("article");
-      card.className = "slate" + (ri === 0 ? "" : " later") + (small ? " small" : "");
+      card.className = "slate" + (small ? " small" : "");
       const KEYS = ["sa", "sb", "sc"];
       card.innerHTML =
         `<div class="slatehead">
            <span>${small ? SMALL_LABEL[g.kind]
-                          : k > 1 ? `Court ${g.court}` : (ri === 0 ? "On court" : "Queued")}</span>
-           ${ri === 0 ? `<span class="slatecap">final score</span>` : ""}
+                          : k > 1 ? `Court ${g.court}` : "Game"}</span>
+           <span class="slatecap">final score</span>
          </div>` +
         sides.map((team, n) => `
           <div class="slateside ${["a", "b", "c"][n]}">
@@ -3329,25 +3337,25 @@ function renderPlan() {
   /* Plan ahead queues six games in one tap, and taking them back should not
    * be six more. It is also the way to re-plan: a queue built before someone
    * arrived does not have them in it, because court time only reaches rounds
-   * suggested after the queue. What is on court stays, and so does anything
-   * with a score typed into it. */
-  const queued = rounds.slice(1).flatMap((r) => r.games)
-    .filter((g) => !scoresOf(g).some((v) => v));
-  if (queued.length >= 2) {
+   * suggested after the queue. Every planned game goes, scored or not --
+   * there is no game on court to keep. */
+  if (S.plan.length >= 2) {
+    const n = S.plan.length;
+    const scored = S.plan.filter((g) => scoresOf(g).some((v) => v)).length;
     const row = document.createElement("div");
     row.className = "btn-row";
     const clr = document.createElement("button");
     clr.className = "btn small ghost"; clr.type = "button";
     clr.id = "planClear";
-    clr.textContent = `Clear the queue (${queued.length})`;
+    clr.textContent = `Clear the queue (${n})`;
     clr.onclick = async () => {
-      if (!await ask(`Take the ${queued.length} queued games off the plan? `
-        + `The ${k > 1 ? "round" : "game"} on court stays.`, "Clear")) return;
-      const gone = new Set(queued.map((g) => g.id));
-      S.plan = S.plan.filter((g) => !gone.has(g.id));
+      if (!await ask(`Take all ${n} planned games off the plan?`
+        + (scored ? ` ${scored === 1 ? "One has" : scored + " have"} a score typed in, `
+          + `which will be lost.` : ""), "Clear")) return;
+      S.plan = [];
       S.discarded = [];
       save(); render();
-      toast(`${queued.length} queued games cleared`);
+      toast(`${n} planned games cleared`);
     };
     row.appendChild(clr);
     host.appendChild(row);
@@ -5322,6 +5330,38 @@ if (!S.here.length && LOG.length) S.here = lastNightRoster(LOG);
 wire();
 render();
 refresh();
+
+/* ------------------------------------------------ staying in step with disk
+ *
+ * Everything that matters is written the moment it changes, so the stored copy
+ * is never behind this page -- except when another copy of the page wrote to
+ * it. A tab the phone discarded and restored, the home-screen icon beside a
+ * browser tab, a second window: each holds its own memory, and whichever saves
+ * last would otherwise overwrite the other's plan with its own stale one.
+ * Coming back to the foreground therefore re-reads storage first, and a
+ * background page saves once more on the way out so nothing is mid-flight. */
+function adoptStored() {
+  let raw = "";
+  try { raw = localStorage.getItem(KEY) || ""; } catch (e) { return; }
+  if (!raw) return;
+  const now = {};
+  PERSIST.forEach((k) => { now[k] = S[k]; });
+  if (raw === JSON.stringify(now)) return;        // nothing changed elsewhere
+  restore();
+  applyTheme();
+  render();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") adoptStored(); else save();
+});
+window.addEventListener("pageshow", adoptStored);       // back from the bfcache
+window.addEventListener("pagehide", save);
+window.addEventListener("storage", (e) => {
+  if (e.key !== KEY) return;
+  const a = document.activeElement;
+  if (a && a.matches && a.matches("input, select, textarea")) return;  // mid-typing
+  adoptStored();
+});
 
 </script>
 
