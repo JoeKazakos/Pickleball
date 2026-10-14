@@ -1212,7 +1212,12 @@ td .dot {
   <section id="playedSec" class="hidden">
     <h2 id="playedHead">Played tonight</h2>
     <div class="log" id="log"></div>
-    <div class="btn-row" style="margin-top:14px">
+  </section>
+
+  <!-- shown as soon as anything is planned or played, so a night that was only
+       ever planned can still be ended -->
+  <section id="nightSec" class="hidden">
+    <div class="btn-row">
       <button class="btn small ghost" id="btnCsv">Copy tonight as CSV</button>
       <button class="btn small ghost" id="btnReset">End night</button>
     </div>
@@ -3287,6 +3292,10 @@ function renderPlan() {
       const band = q === null ? "" : q >= 80 ? "hi" : q >= 55 ? "mid" : "lo";
       const card = document.createElement("article");
       card.className = "slate" + (small ? " small" : "");
+      /* The same badges the suggestion carried, judged against what has been
+       * played and what is queued ahead of it -- so the second game with a
+       * pair is not "new" just because the queue holds it twice. */
+      const tags = small ? [] : gameTags(g, tagContext(g));
       const KEYS = ["sa", "sb", "sc"];
       card.innerHTML =
         `<div class="slatehead">
@@ -3307,7 +3316,9 @@ function renderPlan() {
             } &mdash; not in the ratings or the CSV</span></div>`
           : `<div class="slateq"><span class="qlab">Game quality</span>
                <span class="qmeter"><i class="${band}" style="width:${Math.max(2, q)}%"></i></span>
-               <span class="qnum ${band}">${q}</span></div>`);
+               <span class="qnum ${band}">${q}</span></div>`)
+        + (tags.length ? `<div class="why">${tags.map(([k, t]) =>
+            `<span class="tag ${k}">${esc(t)}</span>`).join("")}</div>` : "");
 
       const acts = document.createElement("div");
       acts.className = "slateacts";
@@ -3404,6 +3415,18 @@ function finishGame(id) {
 }
 
 /* -------------------------------------------------------- 2 · suggestions */
+
+/** What a planned game is new against: the log, tonight's played games, and
+ *  whatever sits ahead of it in the queue -- not the games behind it. */
+function tagContext(g) {
+  const i = S.plan.indexOf(g);
+  const ahead = S.plan.slice(0, Math.max(0, i));
+  const pair = (x) => ({ a: x.a, b: x.b });
+  return {
+    night: tally(S.games.concat(ahead).map(pair), S.here),
+    all: tally(allGames().map(pair).concat(ahead.map(pair)), S.here),
+  };
+}
 
 /** The badges under a proposed game: why this one, in the group's own terms. */
 function gameTags(g, C) {
@@ -4015,6 +4038,8 @@ function renderCustom() {
 function renderPlayed() {
   const has = S.games.length > 0;
   $("#playedSec").classList.toggle("hidden", !has);
+  $("#nightSec").classList.toggle("hidden", !has && !S.plan.length);
+  $("#btnCsv").classList.toggle("hidden", !has);
   if (!has) return;
   $("#playedHead").textContent = `Played tonight · ${S.games.length}`;
 
