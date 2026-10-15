@@ -4774,11 +4774,16 @@ function matchupRows() {
   return { rows, eligible };
 }
 
-/** Whether a matchup is on-screen at all, given the picked players. */
-/** A matchup shows only if everyone picked is somewhere in it, either side. */
+/** Whether a matchup is on-screen at all, given the picked players.
+ *
+ *  Up to four picks narrow: the matchup must contain every one of them, on
+ *  either side. Past four that cannot mean anything -- no matchup holds five
+ *  people -- so the picks become a pool instead: the matchup must be made
+ *  entirely of them. Four picks read the same both ways. */
 function matchupPasses(row, sel) {
   if (!sel.length) return true;
   const four = row.a.concat(row.b);
+  if (sel.length > 4) return four.every((p) => sel.includes(p));
   return sel.every((p) => four.includes(p));
 }
 
@@ -4818,7 +4823,8 @@ function renderMatchups() {
   const shown = rows.filter((r) => matchupPasses(r, S.matchupSel));
   $("#matchupNote").textContent = `${eligible.length} players with `
     + `${MATCHUP_MIN_GAMES}+ games — ${rows.length} possible matchups`
-    + (S.matchupSel.length ? `, ${shown.length} shown` : "") + ".";
+    + (S.matchupSel.length ? `, ${shown.length} shown` : "") + "."
+    + (S.matchupSel.length > 4 ? " Only matchups made up of the people picked." : "");
 
   $("#matchupList").innerHTML = shown.map((r) => {
     const band = r.quality >= 80 ? "hi" : r.quality >= 55 ? "mid" : "lo";
