@@ -761,6 +761,16 @@ td .dot {
   font-size: 11.5px; font-weight: 800; letter-spacing: .09em;
   text-transform: uppercase; color: var(--ink-2);
 }
+.grip {
+  appearance: none; border: 0; background: transparent; cursor: grab;
+  color: var(--ink-3); font-size: 15px; line-height: 1; letter-spacing: -2px;
+  padding: 6px 8px; margin: -6px 0 -6px -8px; min-height: 36px;
+  touch-action: none; user-select: none;
+}
+.grip:active { cursor: grabbing; }
+.round.dragging { position: relative; z-index: 5; opacity: .92; box-shadow: var(--lift); }
+.round.dropbefore { box-shadow: 0 -3px 0 var(--court-solid); }
+.round.dropafter  { box-shadow: 0 3px 0 var(--court-solid); }
 .roundsit {
   font-size: 12.5px; color: var(--ink-3); margin-left: auto;
   font-family: var(--mono);
@@ -1184,7 +1194,10 @@ td .dot {
 
   <!-- every planned game, any of which can be played next -->
   <section id="planSec" class="hidden">
-    <h2 id="planHead">Planned</h2>
+    <button class="disclose" id="planToggle" aria-expanded="true" aria-controls="plan">
+      <span id="planHead">Planned</span>
+      <span class="disclose-sum" id="planSum"></span>
+    </button>
     <div id="plan"></div>
   </section>
 
@@ -2175,6 +2188,7 @@ const S = {
   w: { ...PRESETS.social },
   minQ: 85,            // the floor: no suggestion below this game quality
   prefsOpen: false,
+  planOpen: true,      // the planned games, folded away on request
   rosterOpen: false,   // starts folded away: the last night's players are
                        // already ticked, so there is usually nothing to do
   discarded: [],       // suggestion keys turned down for the current pick
@@ -2210,7 +2224,7 @@ function forgetPeople() {
   S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
 }
 
-const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen",
+const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen", "planOpen",
                  "plan", "games", "window", "fade", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
                  "srcKey", "theme", "skin", "lookOpen", "matchupSel", "batchN"];
 
@@ -3272,6 +3286,12 @@ function renderPlan() {
   $("#planSec").classList.toggle("hidden", !S.plan.length);
   host.innerHTML = "";
   if (!S.plan.length) return;
+  const open = S.planOpen !== false;
+  host.classList.toggle("hidden", !open);
+  $("#planToggle").setAttribute("aria-expanded", open ? "true" : "false");
+  const first = S.plan[0];
+  $("#planSum").textContent = open ? "" : "next: "
+    + sidesOf(first).map((t) => t.join(" & ")).join(" v ");
 
   const rounds = [];
   for (const g of S.plan) {
@@ -3285,9 +3305,12 @@ function renderPlan() {
   rounds.forEach((r, ri) => {
     const wrap = document.createElement("div");
     wrap.className = "round";
+    wrap.dataset.round = r.id;
     const sit = S.here.filter((p) => !r.games.some(
       (g) => playersOf(g).includes(p)));
     wrap.innerHTML = `<div class="roundhead">
+        ${S.plan.length > 1 ? `<button type="button" class="grip" aria-label="Drag to reorder ${
+          k > 1 ? "this round" : "this game"} (or use the up and down arrow keys)">&#8942;&#8942;</button>` : ""}
         <span>${k > 1 ? `Round ${ri + 1} · to ${S.target}` : `Game ${ri + 1} · to ${S.target}`}</span>
         ${sit.length ? `<span class="roundsit">sitting ${esc(sit.join(", "))}</span>` : ""}
       </div>`;
@@ -4904,6 +4927,7 @@ function wire() {
     b.onclick = () => { S.tab = b.dataset.tab; save(); render(); window.scrollTo({ top: 0 }); };
   });
   $("#prefsToggle").onclick = () => { S.prefsOpen = !S.prefsOpen; save(); render(); };
+  $("#planToggle").onclick = () => { S.planOpen = S.planOpen === false; save(); renderPlan(); };
   $("#rosterToggle").onclick = () => { S.rosterOpen = !rosterOpen(); save(); render(); };
   $("#minQ").oninput = (e) => {
     S.minQ = Q_STEPS[Number(e.target.value)] ?? 0;
@@ -4995,6 +5019,82 @@ function wire() {
   /* Score entry is delegated: the planned cards are rebuilt on every render,
      so per-element handlers would go stale the moment a game is saved. */
   const planHost = $("#plan");
+
+  /* Reordering the plan: drag a card's grip, or focus it and use the arrow
+   * keys. What moves is a round -- one game on a single court, both games on
+   * two -- because a round is what is played together. */
+  const moveRound = (id, to) => {
+    const groups = [];
+    S.plan.forEach((g) => {
+      const last = groups[groups.length - 1];
+      if (last && last[0].round === g.round) last.push(g); else groups.push([g]);
+    });
+    const from = groups.findIndex((gr) => String(gr[0].round) === String(id));
+    if (from < 0) return false;
+    to = Math.max(0, Math.min(groups.length - 1, to));
+    if (to === from) return false;
+    const [m] = groups.splice(from, 1);
+    groups.splice(to, 0, m);
+    S.plan = groups.flat();
+    S.discarded = [];
+    save(); render();
+    return true;
+  };
+  let drag = null;
+  planHost.addEventListener("pointerdown", (e) => {
+    const grip = e.target.closest(".grip");
+    if (!grip) return;
+    const wrap = grip.closest(".round");
+    e.preventDefault();
+    try { grip.setPointerCapture(e.pointerId); } catch (x) { /* no capture: window events still arrive */ }
+    drag = { id: wrap.dataset.round, wrap, y0: e.clientY, grip, pid: e.pointerId };
+    wrap.classList.add("dragging");
+  });
+  planHost.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    drag.wrap.style.transform = `translateY(${e.clientY - drag.y0}px)`;
+    const rs = Array.from(planHost.querySelectorAll(".round"));
+    rs.forEach((r) => r.classList.remove("dropbefore", "dropafter"));
+    const t = dropIndex(rs, e.clientY);
+    const own = rs.indexOf(drag.wrap);
+    if (t !== own) rs[t].classList.add(t < own ? "dropbefore" : "dropafter");
+  });
+  /* Where the pointer is, in terms of the rounds' resting positions. The card
+   * being dragged is transformed, so its own box is not used. */
+  function dropIndex(rs, y) {
+    const own = rs.indexOf(drag.wrap);
+    let t = own;
+    rs.forEach((r, i) => {
+      if (i === own) return;
+      const b = r.getBoundingClientRect();
+      if (i < own && y < b.top + b.height / 2) t = Math.min(t, i);
+      if (i > own && y > b.top + b.height / 2) t = Math.max(t, i);
+    });
+    return t;
+  }
+  const endDrag = (e, commit) => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    const rs = Array.from(planHost.querySelectorAll(".round"));
+    const to = commit ? dropIndexFor(rs, d, e.clientY) : rs.indexOf(d.wrap);
+    d.wrap.classList.remove("dragging"); d.wrap.style.transform = "";
+    rs.forEach((r) => r.classList.remove("dropbefore", "dropafter"));
+    if (commit && !moveRound(d.id, to)) { /* dropped where it was */ }
+  };
+  function dropIndexFor(rs, d, y) { drag = d; const t = dropIndex(rs, y); drag = null; return t; }
+  planHost.addEventListener("pointerup", (e) => endDrag(e, true));
+  planHost.addEventListener("pointercancel", (e) => endDrag(e, false));
+  planHost.addEventListener("keydown", (e) => {
+    const grip = e.target.closest(".grip");
+    if (!grip || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const rs = Array.from(planHost.querySelectorAll(".round"));
+    const wrap = grip.closest(".round"), i = rs.indexOf(wrap), id = wrap.dataset.round;
+    if (moveRound(id, i + (e.key === "ArrowUp" ? -1 : 1))) {
+      const g = planHost.querySelector(`.round[data-round="${id}"] .grip`);
+      if (g) g.focus();
+    }
+  });
 
   planHost.addEventListener("input", (e) => {
     const el = e.target.closest(".sscore");
