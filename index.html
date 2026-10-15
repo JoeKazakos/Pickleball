@@ -3095,21 +3095,32 @@ function rosterOpen() {
 
 /* Who appears as a chip.
  *
- * Everyone the log has seen enough of to be worth a standing button, plus
- * anyone typed in tonight. The threshold drops the two names that turn up
- * three and seven times in ten months -- a permanent button for someone who
- * comes once a year is eleven targets where nine would do, and the text box
- * puts them back in one line when they do appear. */
-/* Scaled to the log rather than fixed, so the app works on someone else's
- * sheet. At this group's 364 games these land on 8 and 20, exactly where they
- * were set by hand; on a 60-game log they fall to 1 and 4 instead of hiding
- * everybody. */
-const rosterMinGames = () => Math.min(8, Math.max(1, Math.floor(LOG.length / 45)));
+ * Anyone who played at least one game on the log's last five nights, plus
+ * anyone typed in tonight or already ticked. A name that has not been seen in
+ * five sessions is not who turns up, and the text box puts them back in one
+ * line when they do. The number beside a name is still their games in the
+ * whole log. */
+const ROSTER_NIGHTS = 5;
+
+/** The people who played on the last ROSTER_NIGHTS distinct dates logged. */
+function recentPlayers(log) {
+  const dates = [];
+  for (let i = log.length - 1; i >= 0; i--) {
+    if (!dates.includes(log[i].t)) {
+      if (dates.length === ROSTER_NIGHTS) break;
+      dates.push(log[i].t);
+    }
+  }
+  const who = new Set();
+  log.forEach((g) => { if (dates.includes(g.t)) playersOf(g).forEach((p) => who.add(p)); });
+  return who;
+}
 
 function knownPlayers() {
   const total = {};
   LOG.forEach((g) => playersOf(g).forEach((p) => { total[p] = (total[p] || 0) + 1; }));
-  const out = Object.keys(total).filter((p) => total[p] >= rosterMinGames());
+  const recent = recentPlayers(LOG);
+  const out = Object.keys(total).filter((p) => recent.has(p));
   S.extra.concat(S.here).forEach((p) => { if (!out.includes(p)) out.push(p); });
   S.games.concat(S.plan).forEach((g) => playersOf(g).forEach((p) => {
     if (!out.includes(p)) out.push(p);
