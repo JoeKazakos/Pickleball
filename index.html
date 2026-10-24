@@ -576,6 +576,7 @@ select, input[type="text"] {
   color: var(--ink-3); cursor: pointer;
 }
 .tabs button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--court); }
+.tabs .tabshare { margin: 0 0 0 auto; color: var(--court-ink); }
 
 /* ============================================================== priorities */
 .disclose {
@@ -1119,6 +1120,8 @@ td .dot {
     <button type="button" data-tab="tonight" aria-pressed="true">Tonight</button>
     <button type="button" data-tab="ratings" aria-pressed="false">Ratings</button>
     <button type="button" data-tab="matchups" aria-pressed="false">Matchups</button>
+    <button type="button" class="tabshare" id="shareView"
+            aria-label="Share a link to this tab with these people picked">Share</button>
   </nav>
 </header>
 
@@ -1948,6 +1951,25 @@ function linkSource() {
     return v ? v.trim() : "";
   } catch (e) { return ""; }
 }
+
+/* A link can also open a tab with people already picked:
+ *
+ *     ?csv=<sheet>&tab=matchups&who=Ann,Ben,Cal
+ *
+ * `who` lands on whatever that tab picks people with -- who is here tonight,
+ * the lines on the ratings chart, the matchup filter. Read once, at load, and
+ * then taken off the address bar (the csv stays), so a later reload does not
+ * stamp the link's picks back over whatever has been changed since. */
+const LINK_TABS = ["tonight", "ratings", "matchups"];
+function linkView() {
+  try {
+    const q = new URLSearchParams(location.search);
+    const tab = (q.get("tab") || "").trim().toLowerCase();
+    const who = (q.get("who") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    return { tab: LINK_TABS.includes(tab) ? tab : "", who };
+  } catch (e) { return { tab: "", who: [] }; }
+}
+const LINK_VIEW = linkView();
 
 const lastDate = () => (LOG.length ? LOG[LOG.length - 1].date : "\u2014");
 
@@ -3067,7 +3089,7 @@ function render() {
   $("#tabTonight").classList.toggle("hidden", S.tab !== "tonight");
   $("#tabRatings").classList.toggle("hidden", S.tab !== "ratings");
   $("#tabMatchups").classList.toggle("hidden", S.tab !== "matchups");
-  $$("#tabs button").forEach((b) =>
+  $$("#tabs button[data-tab]").forEach((b) =>
     b.setAttribute("aria-pressed", b.dataset.tab === S.tab ? "true" : "false"));
 
   if (S.tab === "tonight") renderTonight();
@@ -4165,7 +4187,18 @@ function seriesColor(player) {
  * help. Identity rests on the direct label welded to each line's end and on
  * the table below, both of which name the player outright. */
 
+/* Drawing never throws a pick away. On a reload the page paints from its
+ * built-in copy first and the sheet lands a moment later, so names the copy on
+ * screen does not know yet are kept and simply not drawn; loadSource() prunes
+ * against the real log once it has it. Pruning here used to empty the chart's
+ * and the matchup filter's picks on every reload of a ?csv= link. */
 function renderRatings() {
+  const kept = S.shown.slice();
+  drawRatings();
+  kept.forEach((p) => { if (!CHARTABLE.includes(p) && !S.shown.includes(p)) S.shown.push(p); });
+}
+
+function drawRatings() {
   const games = allGames();
   const roster = rosterOf(games);
 
@@ -4812,7 +4845,7 @@ function matchupPasses(row, sel) {
 
 function renderMatchups() {
   const { rows, eligible } = matchupRows();
-  S.matchupSel = S.matchupSel.filter((p) => eligible.includes(p));
+  const sel = S.matchupSel.filter((p) => eligible.includes(p));   // see renderRatings
   $("#matchupMinNote").textContent = MATCHUP_MIN_GAMES;
 
   const total = {};
@@ -4822,7 +4855,7 @@ function renderMatchups() {
   const pickHost = $("#matchupPick");
   pickHost.innerHTML = "";
   for (const p of eligible) {
-    const on = S.matchupSel.includes(p);
+    const on = sel.includes(p);
     const b = document.createElement("button");
     b.className = "chip"; b.type = "button";
     b.setAttribute("aria-pressed", on ? "true" : "false");
@@ -4843,11 +4876,11 @@ function renderMatchups() {
     return;
   }
 
-  const shown = rows.filter((r) => matchupPasses(r, S.matchupSel));
+  const shown = rows.filter((r) => matchupPasses(r, sel));
   $("#matchupNote").textContent = `${eligible.length} players with `
     + `${MATCHUP_MIN_GAMES}+ games — ${rows.length} possible matchups`
-    + (S.matchupSel.length ? `, ${shown.length} shown` : "") + "."
-    + (S.matchupSel.length > 4 ? " Only matchups made up of the people picked." : "");
+    + (sel.length ? `, ${shown.length} shown` : "") + "."
+    + (sel.length > 4 ? " Only matchups made up of the people picked." : "");
 
   $("#matchupList").innerHTML = shown.map((r) => {
     const band = r.quality >= 80 ? "hi" : r.quality >= 55 ? "mid" : "lo";
@@ -4923,7 +4956,7 @@ function copyCsv() {
 
 /* ================================================================== wiring */
 function wire() {
-  $$("#tabs button").forEach((b) => {
+  $$("#tabs button[data-tab]").forEach((b) => {
     b.onclick = () => { S.tab = b.dataset.tab; save(); render(); window.scrollTo({ top: 0 }); };
   });
   $("#prefsToggle").onclick = () => { S.prefsOpen = !S.prefsOpen; save(); render(); };
@@ -5293,6 +5326,17 @@ function wire() {
   $("#sourceUrl").onkeydown = (e) => {
     if (e.key === "Enter") { e.preventDefault(); $("#sourceLoad").click(); }
   };
+  $("#shareView").onclick = () => {
+    const link = viewLink();
+    const fallback = () => { window.prompt("Copy this link", link); };
+    if (navigator.share) {
+      navigator.share({ title: "Paddle Up", url: link }).catch((e) => {
+        if (e && e.name !== "AbortError") fallback();
+      });
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => toast("Link copied")).catch(fallback);
+    } else fallback();
+  };
   $("#sourceShare").onclick = () => {
     const url = $("#sourceUrl").value.trim() || sourceUrl();
     if (!url) return toast("Set a source first");
@@ -5423,6 +5467,8 @@ function loadSource(url, quiet) {
       SOURCE = "live";
       CHARTABLE = chartable();
       S.shown = S.shown.filter((p) => CHARTABLE.includes(p));
+      const elig = matchupEligible();
+      S.matchupSel = S.matchupSel.filter((p) => elig.includes(p));
       clearWpCache();
       save();
       render();
@@ -5441,8 +5487,61 @@ function loadSource(url, quiet) {
 /** On load: whatever the link, the saved setting or the build points at. */
 function refresh() {
   const url = sourceUrl();
-  if (!url) { renderSource(); return; }
-  loadSource(url, true).then(renderSource);
+  if (!url) { renderSource(); applyLinkWho(); return; }
+  loadSource(url, true).then(() => { renderSource(); applyLinkWho(); });
+}
+
+/**
+ * Put a link's `who` onto the tab it named.
+ *
+ * Only once the sheet has had its chance to load: a first visit with a new
+ * ?csv= swaps the log and resets the roster when the fetch lands, which would
+ * wipe picks made any earlier. Names are matched to the log's spelling, so
+ * "ann" in a hand-typed link still finds Ann.
+ */
+function applyLinkWho() {
+  const { tab, who } = LINK_VIEW;
+  stripLinkView();
+  if (!who.length) return;
+  const known = rosterOf(allGames());
+  const canon = (n) => known.find((k) => k.toLowerCase() === n.toLowerCase()) || n;
+  const names = Array.from(new Set(who.map(canon)));
+  const on = tab || S.tab;
+  if (on === "ratings") {
+    const shown = names.filter((p) => CHARTABLE.includes(p));
+    if (shown.length) S.shown = shown;
+  } else if (on === "matchups") {
+    S.matchupSel = names.filter((p) => known.includes(p));
+  } else {
+    S.here = names;
+    names.forEach((p) => { if (!known.includes(p) && !S.extra.includes(p)) S.extra.push(p); });
+    S.discarded = [];
+    dropUnplayablePlan();
+  }
+  save(); render();
+}
+
+/** Take tab= and who= off the address bar, keeping everything else. */
+function stripLinkView() {
+  try {
+    const u = new URL(location.href);
+    if (!u.searchParams.has("tab") && !u.searchParams.has("who")) return;
+    u.searchParams.delete("tab"); u.searchParams.delete("who");
+    history.replaceState(null, "", u.pathname + u.search + u.hash);
+  } catch (e) { /* no history API: the picks just apply again on reload */ }
+}
+
+/** A link to what is on screen: the source, this tab, and its picks. */
+function viewLink() {
+  const u = new URL(location.origin + location.pathname);
+  const src = sourceUrl();
+  if (src && SOURCE === "live") u.searchParams.set("csv", src);
+  else if (linkSource()) u.searchParams.set("csv", linkSource());
+  u.searchParams.set("tab", S.tab);
+  const who = S.tab === "ratings" ? S.shown
+    : S.tab === "matchups" ? S.matchupSel : S.here;
+  if (who.length) u.searchParams.set("who", who.join(","));
+  return u.toString();
 }
 
 /**
@@ -5464,6 +5563,7 @@ function lastNightRoster(log) {
 
 restore();
 applyTheme();      // before the first paint, so nothing flashes
+if (LINK_VIEW.tab) S.tab = LINK_VIEW.tab;
 if (linkSource() && linkSource() !== S.sourceUrl) {
   S.sourceUrl = linkSource();          // the link wins, and is remembered
   S.sourceOpen = false;
