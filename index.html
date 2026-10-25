@@ -1311,19 +1311,19 @@ td .dot {
       <span class="flab" id="winLab">Window</span>
       <div class="seg" id="winSeg" role="group" aria-labelledby="winLab">
         <button type="button" data-w="20" aria-pressed="false">20</button>
-        <button type="button" data-w="40" aria-pressed="true">40</button>
+        <button type="button" data-w="40" aria-pressed="false">40</button>
         <button type="button" data-w="80" aria-pressed="false">80</button>
         <button type="button" data-w="150" aria-pressed="false">150</button>
-        <button type="button" data-w="0" aria-pressed="false">All</button>
+        <button type="button" data-w="0" aria-pressed="true">All</button>
       </div>
     </div>
 
     <div class="field">
       <span class="flab" id="fadeLab">Fade</span>
       <div class="seg" id="fadeSeg" role="group" aria-labelledby="fadeLab">
-        <button type="button" data-h="0" aria-pressed="true">Off</button>
+        <button type="button" data-h="0" aria-pressed="false">Off</button>
         <button type="button" data-h="20" aria-pressed="false">20</button>
-        <button type="button" data-h="50" aria-pressed="false">50</button>
+        <button type="button" data-h="50" aria-pressed="true">50</button>
         <button type="button" data-h="100" aria-pressed="false">100</button>
       </div>
     </div>
@@ -2100,6 +2100,19 @@ function fadeWeights(from, n, now, h) {
   return Array.from({ length: n }, (_, j) => Math.pow(0.5, (now - from - j) / h));
 }
 
+/**
+ * The ratings games are picked on -- Tonight's suggestions and plan, and the
+ * Matchups tab. The whole log, every game in, with a half-life of 100 games:
+ * recent form leads, but nobody's rating rests on a handful of nights. Fixed,
+ * not the Ratings tab's window and fade, which are for looking at form and
+ * should not quietly change who gets put on court.
+ */
+const PICK_FADE = 100;
+function pickingFit(games) {
+  return ridge(games, rosterOf(games),
+    fadeWeights(0, games.length, games.length - 1, PICK_FADE));
+}
+
 /** Rating at every point in the log, on a trailing window. w = 0 means all;
  *  h is the fade's half-life in games, 0 for none. */
 const MIN_IN_WINDOW = 4;
@@ -2216,8 +2229,9 @@ const S = {
   discarded: [],       // suggestion keys turned down for the current pick
   plan: [],            // upcoming games: {id, round, court, a, b, sit, sa, sb}
   games: [],           // played tonight: {a, b, sa, sb, sit}
-  window: 40,
-  fade: 0,             // half-life in games for down-weighting old ones; 0 = off
+  window: 0,           // the Ratings tab's trailing window; 0 = the whole log
+  fade: 50,            // half-life in games for down-weighting old ones; 0 = off
+  defaultsRev: 2,      // bumped when a default above changes for everyone
   shown: [],           // players selected in the chart
   chartMode: "separate",  // "together" | "separate"; the default before anyone
                           // has touched the toggle
@@ -2248,7 +2262,7 @@ function forgetPeople() {
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen", "planOpen",
                  "plan", "games", "window", "fade", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
-                 "srcKey", "theme", "skin", "lookOpen", "matchupSel", "batchN"];
+                 "srcKey", "theme", "skin", "lookOpen", "matchupSel", "batchN", "defaultsRev"];
 
 function save() {
   try {
@@ -2274,6 +2288,10 @@ function restore() {
     const v = JSON.parse(localStorage.getItem(KEY) || "null");
     if (!v || !Array.isArray(v.here)) { S.srcKey = baked; return; }
     PERSIST.forEach((k) => { if (v[k] !== undefined) S[k] = v[k]; });
+    /* The Ratings tab's defaults moved to the whole log with a 50-game fade.
+     * A phone that saved the old ones (window 40, no fade) would never see
+     * that, so they are reset once; a choice made after this sticks. */
+    if ((v.defaultsRev || 1) < 2) { S.window = 0; S.fade = 50; S.defaultsRev = 2; }
 
     /* Compared against what is actually, synchronously loaded right now --
      * the baked-in copy, real snapshot or sample -- never a ?csv= link, which
@@ -2473,7 +2491,7 @@ let CTX = null;
 function context() {
   const games = allGames();
   const roster = S.here;
-  const fit = ridge(games, rosterOf(games));
+  const fit = pickingFit(games);
   const rate = Object.fromEntries(fit.players.map((p, i) => [p, fit.beta[i]]));
 
   /* Two views of tonight. `tonight` is flattened to two sides for tally(),
@@ -4821,7 +4839,7 @@ function matchupRow(pair, rate, games) {
  *  whichever has actually been played more. */
 function matchupRows() {
   const games = allGames();
-  const fit = ridge(games, rosterOf(games));
+  const fit = pickingFit(games);
   const rate = Object.fromEntries(fit.players.map((p, i) => [p, fit.beta[i]]));
   const eligible = matchupEligible();
   const dbl = games.filter((g) => !isSmall(g));
@@ -5570,7 +5588,7 @@ function lastNightRoster(log) {
 
 restore();
 applyTheme();      // before the first paint, so nothing flashes
-if (LINK_VIEW.tab) S.tab = LINK_VIEW.tab;
+if (LINK_VIEW.tab) { S.tab = LINK_VIEW.tab; save(); }
 if (linkSource() && linkSource() !== S.sourceUrl) {
   S.sourceUrl = linkSource();          // the link wins, and is remembered
   S.sourceOpen = false;
@@ -5603,7 +5621,9 @@ function adoptStored() {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") adoptStored(); else save();
 });
-window.addEventListener("pageshow", adoptStored);       // back from the bfcache
+// back from the bfcache only: pageshow also fires on an ordinary first load,
+// where re-reading storage would undo a link's tab before it had been saved
+window.addEventListener("pageshow", (e) => { if (e.persisted) adoptStored(); });
 window.addEventListener("pagehide", save);
 window.addEventListener("storage", (e) => {
   if (e.key !== KEY) return;
