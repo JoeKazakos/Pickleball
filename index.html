@@ -2231,9 +2231,9 @@ const S = {
   games: [],           // played tonight: {a, b, sa, sb, sit}
   window: 0,           // the Ratings tab's trailing window; 0 = the whole log
   fade: 50,            // half-life in games for down-weighting old ones; 0 = off
-  defaultsRev: 2,      // bumped when a default above changes for everyone
+  defaultsRev: 3,      // bumped when a default above changes for everyone
   shown: [],           // players selected in the chart
-  chartMode: "separate",  // "together" | "separate"; the default before anyone
+  chartMode: "together",  // "together" | "separate"; the default before anyone
                           // has touched the toggle
   range: null,         // [fromFraction, toFraction] of the fitted series
   custom: { p: ["", "", "", ""], sa: "", sb: "" },   // the unplanned game
@@ -2291,7 +2291,10 @@ function restore() {
     /* The Ratings tab's defaults moved to the whole log with a 50-game fade.
      * A phone that saved the old ones (window 40, no fade) would never see
      * that, so they are reset once; a choice made after this sticks. */
-    if ((v.defaultsRev || 1) < 2) { S.window = 0; S.fade = 50; S.defaultsRev = 2; }
+    if ((v.defaultsRev || 1) < 2) { S.window = 0; S.fade = 50; }
+    // and the chart's lines moved to Together by default (rev 3)
+    if ((v.defaultsRev || 1) < 3) S.chartMode = "together";
+    S.defaultsRev = 3;
 
     /* Compared against what is actually, synchronously loaded right now --
      * the baked-in copy, real snapshot or sample -- never a ?csv= link, which
