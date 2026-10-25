@@ -1121,7 +1121,7 @@ td .dot {
     <button type="button" data-tab="ratings" aria-pressed="false">Ratings</button>
     <button type="button" data-tab="matchups" aria-pressed="false">Matchups</button>
     <button type="button" class="tabshare" id="shareView"
-            aria-label="Share a link to this tab with these people picked">Share</button>
+            aria-label="Copy a link to this tab with these people picked">Share</button>
   </nav>
 </header>
 
@@ -5327,15 +5327,22 @@ function wire() {
     if (e.key === "Enter") { e.preventDefault(); $("#sourceLoad").click(); }
   };
   $("#shareView").onclick = () => {
+    /* Straight to the clipboard and a toast -- no share sheet, no dialog.
+     * The old execCommand route covers browsers without the clipboard API. */
     const link = viewLink();
-    const fallback = () => { window.prompt("Copy this link", link); };
-    if (navigator.share) {
-      navigator.share({ title: "Paddle Up", url: link }).catch((e) => {
-        if (e && e.name !== "AbortError") fallback();
-      });
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(link).then(() => toast("Link copied")).catch(fallback);
-    } else fallback();
+    const legacy = () => {
+      const ta = document.createElement("textarea");
+      ta.value = link; ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { /* not allowed */ }
+      ta.remove();
+      toast(ok ? "Link copied" : "Couldn't copy the link");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(() => toast("Link copied")).catch(legacy);
+    } else legacy();
   };
   $("#sourceShare").onclick = () => {
     const url = $("#sourceUrl").value.trim() || sourceUrl();
