@@ -1157,7 +1157,7 @@ td .dot {
       <div class="qfloor">
         <div class="prilab">Close games<span>only suggest games at least this good</span></div>
         <div class="qfloorrow">
-          <input type="range" id="minQ" min="0" max="11" step="1" value="1"
+          <input type="range" id="minQ" min="0" max="11" step="1" value="3"
                  list="qticks" aria-label="Minimum game quality">
           <datalist id="qticks">
             <option value="0"></option><option value="1"></option>
@@ -1167,7 +1167,7 @@ td .dot {
             <option value="8"></option><option value="9"></option>
             <option value="10"></option><option value="11"></option>
           </datalist>
-          <span class="qfloorval" id="minQVal">50</span>
+          <span class="qfloorval" id="minQVal">60</span>
         </div>
         <!-- endpoints only: the 50 notch sits second from the left, so a
              centred "50" label would point at the wrong tick -->
@@ -2222,7 +2222,7 @@ const PRIORITIES = [
  * 14.3 distinct partnerships. */
 const PRESETS = {
   balanced: { partnerNight: 1, matchAll: 0, minQ: 85 },
-  social:   { partnerNight: 2, matchAll: 1, minQ: 85 },
+  social:   { partnerNight: 2, matchAll: 1, minQ: 60 },
   fresh:    { partnerNight: 2, matchAll: 3, minQ: 50 },
 };
 
@@ -2232,7 +2232,7 @@ const S = {
   target: 11,        // this group plays to 11, always
   courts: 1,           // one or two; a third has never been needed
   w: { ...PRESETS.social },
-  minQ: 85,            // the floor: no suggestion below this game quality
+  minQ: 60,            // the floor: no suggestion below this game quality
   prefsOpen: false,
   planOpen: true,      // the planned games, folded away on request
   rosterOpen: false,   // starts folded away: the last night's players are
@@ -2242,7 +2242,7 @@ const S = {
   games: [],           // played tonight: {a, b, sa, sb, sit}
   window: 0,           // the Ratings tab's trailing window; 0 = the whole log
   fade: 50,            // half-life in games for down-weighting old ones; 0 = off
-  defaultsRev: 3,      // bumped when a default above changes for everyone
+  defaultsRev: 4,      // bumped when a default above changes for everyone
   shown: [],           // players selected in the chart
   chartMode: "together",  // "together" | "separate"; the default before anyone
                           // has touched the toggle
@@ -2305,7 +2305,10 @@ function restore() {
     if ((v.defaultsRev || 1) < 2) { S.window = 0; S.fade = 50; }
     // and the chart's lines moved to Together by default (rev 3)
     if ((v.defaultsRev || 1) < 3) S.chartMode = "together";
-    S.defaultsRev = 3;
+    // and the quality floor's default moved from 85 to 60 (rev 4): at 85 most
+    // rounds could not be filled, and a floor above ~50 barely cuts blowouts
+    if ((v.defaultsRev || 1) < 4) S.minQ = 60;
+    S.defaultsRev = 4;
 
     /* Compared against what is actually, synchronously loaded right now --
      * the baked-in copy, real snapshot or sample -- never a ?csv= link, which
