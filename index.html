@@ -2150,7 +2150,18 @@ function ratingSeries(games, players, w, h = 0) {
  * probability are monotone in p, so one sampled table serves both directions
  * by binary search, built once per target. Sampling is denser near p = 0.5,
  * where the margin curve is steepest and where nearly every real matchup sits.
+ *
+ * Serving is a disadvantage in pickleball: the two-bounce rule gets the
+ * receivers to the kitchen first. Between even teams the serving side is taken
+ * to win 35% of rallies, not 50%. That makes games less streaky (shorter
+ * scoring runs), so a given predicted margin means a likelier win for the
+ * favourite. The group's own scores fit a rate around 20-30% best and rule out
+ * 50%; src/sideout_decide.py found the same lean from win/loss alone. Counting
+ * serves per game would pin it down. `p` stays the rally share on neutral
+ * footing; SERVE_EDGE shifts it for whichever side is serving.
  */
+const SERVE_WIN = 0.35;
+const SERVE_EDGE = Math.log(SERVE_WIN / (1 - SERVE_WIN));
 const _mTable = new Map();
 function marginTable(target) {
   let t = _mTable.get(target);
@@ -2158,8 +2169,8 @@ function marginTable(target) {
   const ps = [], ms = [], ws = [];
   for (let i = 0; i <= 256; i++) {
     const p = 0.5 + 0.4995 * Math.pow(i / 256, 1.4);
-    const e = soExpectedScore(p, target);
-    ps.push(p); ms.push(e[0] - e[1]); ws.push(soGameWinProb(p, target));
+    const e = soExpectedScore(p, target, SERVE_EDGE);
+    ps.push(p); ms.push(e[0] - e[1]); ws.push(soGameWinProb(p, target, SERVE_EDGE));
   }
   t = { ps, ms, ws };
   _mTable.set(target, t);
