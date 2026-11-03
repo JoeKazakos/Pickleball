@@ -1049,6 +1049,11 @@ td .dot {
    which is the whole point of highlighting it. */
 .ratinglayout { margin-top: 4px; }
 .ratingside { margin-top: 26px; }
+.holdcheck {
+  display: flex; align-items: center; gap: 10px; margin-top: 16px;
+  font-weight: 700; font-size: 15px; cursor: pointer;
+}
+.holdcheck input { width: 20px; height: 20px; margin: 0; accent-color: var(--court); flex: 0 0 auto; }
 
 @media (min-width: 880px) {
   #tabRatings, #tabMatchups { max-width: 1080px; }
@@ -1332,6 +1337,11 @@ td .dot {
     far back a quarter. It works inside the window &mdash; pick <b>All</b> to keep
     every game in, just quieter with age.</p>
 
+    <div class="field hidden" id="holdField">
+      <label for="holdWho">Hold steady</label>
+      <select id="holdWho"></select>
+    </div>
+
     <div class="field">
       <span class="flab" id="linesLab">Lines</span>
       <div class="seg" id="modeSeg" role="group" aria-labelledby="linesLab">
@@ -1374,6 +1384,17 @@ td .dot {
         chart and the matching game lights up. At the bottom are the games from before the chart starts, so
         you can see where everyone&rsquo;s rating came from.</p>
         <div class="impact" id="impact"></div>
+
+        <label class="holdcheck" for="holdOn">
+          <input type="checkbox" id="holdOn">
+          <span>Hold one player steady</span>
+        </label>
+        <p class="note" style="margin-top:6px">A rating only says how players compare,
+        so the whole chart can slide up or down without any prediction changing.
+        Normally the group is kept centred on zero. Tick this to keep one
+        player&rsquo;s line flat at today&rsquo;s value instead: every gap that closed
+        on them then reads as someone else improving. It is an assumption, not a
+        measurement &mdash; the scores cannot say whether anyone stood still.</p>
       </div>
     </div>
   </section>
@@ -1959,15 +1980,28 @@ function linkSource() {
  * `who` lands on whatever that tab picks people with -- who is here tonight,
  * the lines on the ratings chart, the matchup filter. Read once, at load, and
  * then taken off the address bar (the csv stays), so a later reload does not
- * stamp the link's picks back over whatever has been changed since. */
+ * stamp the link's picks back over whatever has been changed since.
+ *
+ * A Ratings link carries the rest of that tab's setup too:
+ *
+ *     &win=40&fade=50&lines=separate&range=25-100&hold=Ann
+ *
+ * win and fade take the values their buttons offer, range is the two slider
+ * positions in percent, and hold names the player held steady. A link with any
+ * of these is a whole view, so one without `hold` turns holding off and one
+ * without `range` shows all of it. A link with only `who` -- the older kind --
+ * leaves the rest as the reader had it. */
 const LINK_TABS = ["tonight", "ratings", "matchups"];
+const LINK_RATINGS = ["win", "fade", "lines", "range", "hold"];
 function linkView() {
   try {
     const q = new URLSearchParams(location.search);
     const tab = (q.get("tab") || "").trim().toLowerCase();
     const who = (q.get("who") || "").split(",").map((s) => s.trim()).filter(Boolean);
-    return { tab: LINK_TABS.includes(tab) ? tab : "", who };
-  } catch (e) { return { tab: "", who: [] }; }
+    const view = {};
+    LINK_RATINGS.forEach((k) => { if (q.has(k)) view[k] = (q.get(k) || "").trim(); });
+    return { tab: LINK_TABS.includes(tab) ? tab : "", who, ratings: view };
+  } catch (e) { return { tab: "", who: [], ratings: {} }; }
 }
 const LINK_VIEW = linkView();
 
@@ -2247,6 +2281,8 @@ const S = {
   chartMode: "together",  // "together" | "separate"; the default before anyone
                           // has touched the toggle
   range: null,         // [fromFraction, toFraction] of the fitted series
+  holdOn: false,       // draw the chart with one player's line held flat
+  hold: "",            // ...that player; empty picks today's top rating
   custom: { p: ["", "", "", ""], sa: "", sb: "" },   // the unplanned game
   extra: [],           // people typed in who are not in the log yet
   noSmall: [],         // people who would rather sit than play a small game
@@ -2269,10 +2305,12 @@ function forgetPeople() {
   S.here = []; S.extra = []; S.games = []; S.plan = [];
   S.shown = []; S.noSmall = []; S.discarded = []; S.matchupSel = [];
   S.custom = { p: ["", "", "", ""], sa: "", sb: "" };
+  S.hold = "";         // a name; whether to hold anyone at all is a preference
 }
 
 const PERSIST = ["tab", "here", "target", "courts", "w", "prefsOpen", "rosterOpen", "planOpen",
                  "plan", "games", "window", "fade", "shown", "chartMode", "custom", "extra", "noSmall", "range", "minQ", "sourceUrl", "sourceOpen",
+                 "holdOn", "hold",
                  "srcKey", "theme", "skin", "lookOpen", "matchupSel", "batchN", "defaultsRev"];
 
 function save() {
@@ -4273,11 +4311,72 @@ function drawRatings() {
   }
 
   const full = ratingSeries(games, roster, S.window, S.fade);
+  renderHold(full, roster);
   const series = sliceRange(full);
+  const drawn = sliceRange(holdSteady(full, roster, heldPlayer()));
   renderRange(full, series);
-  drawChart(series, roster, games);
-  ratingNote();
+  drawChart(drawn, roster, games);
+  ratingNote(drawn, roster);
   renderImpact(series, roster, games, full);
+}
+
+/* ---- holding one player steady -------------------------------------------
+ *
+ * Every rating is a comparison: add a constant to everyone and no predicted
+ * margin changes. Paddle Up removes that constant by keeping the group
+ * centred on zero, which means nobody can improve on average. The other
+ * reading is to pick one player and assume they stood still: their line is
+ * drawn flat at today's value and everyone else is drawn relative to them, so
+ * a gap that closed on them reads as the others getting better.
+ *
+ * Only the drawing moves. The gaps between players are exactly the normal
+ * chart's, and nothing that picks games is touched.
+ */
+
+/** The player held steady, or "" when that is off or they cannot be plotted. */
+function heldPlayer() {
+  return S.holdOn && CHARTABLE.includes(S.hold) ? S.hold : "";
+}
+
+/** The series re-levelled so `who` stays at their latest rated value. Where
+ *  they are not rated (too few games in a short window) there is nothing to
+ *  measure against, so that point draws as a gap for everyone. */
+function holdSteady(full, roster, who) {
+  const k = roster.indexOf(who);
+  if (k < 0) return full;
+  let ref = null;
+  for (let n = full.length - 1; n >= 0 && ref === null; n--) {
+    if (full[n].games[k] >= MIN_IN_WINDOW) ref = full[n].beta[k];
+  }
+  if (ref === null) return full;
+  return full.map((s) => (s.games[k] >= MIN_IN_WINDOW
+    ? { ...s, beta: s.beta.map((b) => b + ref - s.beta[k]) }
+    : { ...s, games: s.games.map(() => 0) }));
+}
+
+/** The checkbox, and the player picker it reveals above Lines. Ticking it
+ *  with nobody chosen yet picks whoever rates highest today.
+ *
+ *  Only when nobody is chosen: a reload paints from the built-in copy before
+ *  the sheet lands, and a name that copy does not know yet is kept, not
+ *  swapped for a default -- the same rule the chart's picks follow. */
+function renderHold(full, roster) {
+  if (S.holdOn && !S.hold) {
+    const last = full[full.length - 1];
+    let best = "", top = -Infinity;
+    if (last) CHARTABLE.forEach((p) => {
+      const i = roster.indexOf(p);
+      if (i >= 0 && last.games[i] >= MIN_IN_WINDOW && last.beta[i] > top) { top = last.beta[i]; best = p; }
+    });
+    S.hold = best || CHARTABLE[0] || "";
+  }
+  $("#holdOn").checked = !!S.holdOn;
+  $("#holdField").classList.toggle("hidden", !S.holdOn);
+  const sel = $("#holdWho");
+  const names = CHARTABLE.slice().sort();
+  if (S.hold && !names.includes(S.hold)) names.unshift(S.hold);   // still loading
+  sel.innerHTML = names
+    .map((p) => `<option value="${esc(p)}"${p === S.hold ? " selected" : ""}>${esc(p)}</option>`).join("");
 }
 
 /** The visible slice of the fitted series, from the two range handles. */
@@ -4303,14 +4402,28 @@ function renderRange(full, shown) {
 }
 
 /** What the chart is showing, and what it deliberately is not. */
-function ratingNote() {
+function ratingNote(drawn, roster) {
   const off = rosterOf(LOG).filter((p) => !CHARTABLE.includes(p));
+  const held = heldPlayer();
+  let holdLine = "";
+  if (held && drawn && drawn.length > 1) {
+    // how far the group moved, measured against the one assumed to stand still
+    const a = drawn[0], z = drawn[drawn.length - 1];
+    const both = CHARTABLE.map((p) => roster.indexOf(p))
+      .filter((i) => i >= 0 && a.games[i] >= MIN_IN_WINDOW && z.games[i] >= MIN_IN_WINDOW);
+    const mean = (s) => both.reduce((t, i) => t + s.beta[i], 0) / both.length;
+    holdLine = `<b>${esc(held)} is held steady</b>: their line stays at today&rsquo;s value and ` +
+      `everyone else is drawn against it, so a gap that closed reads as the others improving. ` +
+      (both.length ? `On that assumption the ${both.length} rated players&rsquo; average moved ` +
+        `<b>${signed(mean(z) - mean(a))}</b> from ${esc(a.date)} to ${esc(z.date)}. ` : "") +
+      `The gaps between players are the same as without it. `;
+  }
   const w = S.window ? `last ${S.window} games` : "whole log";
   const h = S.fade
     ? `, with older games fading &mdash; a game <b>${S.fade} games back counts half</b>, ` +
       `${S.fade * 2} back a quarter`
     : "";
-  $("#ratingNote").innerHTML =
+  $("#ratingNote").innerHTML = holdLine +
     `Points per game added to your team, refitted after every game over the ` +
     `<b>${w}</b>${h}. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
     `games${S.fade ? "&rsquo; worth of weight" : ""} inside the window &mdash; ridge would ` +
@@ -4355,6 +4468,7 @@ function renderImpact(series, roster, games, full) {
   }
 
   const w = S.window, h = S.fade;
+  const heldAt = roster.indexOf(heldPlayer());
   const rows = [];
   for (let n = series.length - 1; n >= -warmup; n--) {
     // n below zero walks back through the games the chart does not draw
@@ -4371,7 +4485,10 @@ function renderImpact(series, roster, games, full) {
     const rated = roster
       .map((p, i) => i)
       .filter((i) => before.games[i] >= minG && after.games[i] >= minG);
+    // Normally the mean move is taken out. Holding someone steady takes out
+    // their move instead, so every part reads against them, as the line does.
     const centreOn = (vec) => {
+      if (rated.includes(heldAt)) return vec.map((v) => v - vec[heldAt]);
       const mu = rated.length ? rated.reduce((t, i) => t + vec[i], 0) / rated.length : 0;
       return vec.map((v) => v - mu);
     };
@@ -4539,6 +4656,7 @@ function drawChart(series, roster, games) {
   $("#figCap").textContent =
     `Points per game added to your team · ${S.window ? "trailing " + S.window + " games" : "whole log"}`
     + (S.fade ? ` · half-life ${S.fade} games` : "")
+    + (heldPlayer() ? ` · ${heldPlayer()} held steady` : "")
     + (mode === "separate"
         ? ` · one panel each, shared scale ${signed(data.lo, 0)} to ${signed(data.hi, 0)}`
         : S.shown.length > OVERLAY_MAX ? " · labelled at the line ends" : "");
@@ -5083,6 +5201,13 @@ function wire() {
   $("#fromR").oninput = onRange;
   $("#toR").oninput = onRange;
   $("#rangeAll").onclick = () => { S.range = null; save(); renderRatings(); };
+  $("#holdOn").onchange = () => {
+    S.holdOn = $("#holdOn").checked;
+    // a name left over from another log would hold nobody: start afresh
+    if (S.holdOn && !CHARTABLE.includes(S.hold)) S.hold = "";
+    save(); renderRatings();
+  };
+  $("#holdWho").onchange = () => { S.hold = $("#holdWho").value; save(); renderRatings(); };
 
   /* Score entry is delegated: the planned cards are rebuilt on every render,
      so per-element handlers would go stale the moment a game is saved. */
@@ -5542,11 +5667,13 @@ function refresh() {
  * "ann" in a hand-typed link still finds Ann.
  */
 function applyLinkWho() {
-  const { tab, who } = LINK_VIEW;
+  const { tab, who, ratings } = LINK_VIEW;
   stripLinkView();
-  if (!who.length) return;
   const known = rosterOf(allGames());
   const canon = (n) => known.find((k) => k.toLowerCase() === n.toLowerCase()) || n;
+  CHARTABLE = chartable();
+  const view = applyLinkRatings(ratings, canon);
+  if (!who.length) { if (view) { save(); render(); } return; }
   const names = Array.from(new Set(who.map(canon)));
   const on = tab || S.tab;
   if (on === "ratings") {
@@ -5563,12 +5690,36 @@ function applyLinkWho() {
   save(); render();
 }
 
-/** Take tab= and who= off the address bar, keeping everything else. */
+/**
+ * Put a link's Ratings setup in place. Each value is checked against what the
+ * controls actually offer, and one that is not is ignored rather than guessed
+ * at. Returns whether the link carried a Ratings view at all.
+ */
+function applyLinkRatings(r, canon) {
+  if (!r || !Object.keys(r).length) return false;
+  const offered = (sel, key) => $$(sel).map((b) => Number(b.dataset[key]));
+  if ("win" in r && offered("#winSeg button", "w").includes(Number(r.win)) && r.win !== "") S.window = Number(r.win);
+  if ("fade" in r && offered("#fadeSeg button", "h").includes(Number(r.fade)) && r.fade !== "") S.fade = Number(r.fade);
+  if (r.lines === "together" || r.lines === "separate") S.chartMode = r.lines;
+  const m = /^(\d{1,3})-(\d{1,3})$/.exec(r.range || "");
+  if (m) {
+    let lo = Math.min(100, Number(m[1])) / 100, hi = Math.min(100, Number(m[2])) / 100;
+    if (lo > hi) { const t = lo; lo = hi; hi = t; }
+    S.range = (lo <= 0 && hi >= 1) || lo === hi ? null : [lo, hi];
+  } else S.range = null;
+  const held = r.hold ? canon(r.hold) : "";
+  S.holdOn = CHARTABLE.includes(held);
+  if (S.holdOn) S.hold = held;
+  return true;
+}
+
+/** Take the view's settings off the address bar, keeping everything else. */
 function stripLinkView() {
   try {
     const u = new URL(location.href);
-    if (!u.searchParams.has("tab") && !u.searchParams.has("who")) return;
-    u.searchParams.delete("tab"); u.searchParams.delete("who");
+    const keys = ["tab", "who"].concat(LINK_RATINGS);
+    if (!keys.some((k) => u.searchParams.has(k))) return;
+    keys.forEach((k) => u.searchParams.delete(k));
     history.replaceState(null, "", u.pathname + u.search + u.hash);
   } catch (e) { /* no history API: the picks just apply again on reload */ }
 }
@@ -5583,6 +5734,13 @@ function viewLink() {
   const who = S.tab === "ratings" ? S.shown
     : S.tab === "matchups" ? S.matchupSel : S.here;
   if (who.length) u.searchParams.set("who", who.join(","));
+  if (S.tab === "ratings") {
+    u.searchParams.set("win", S.window);
+    u.searchParams.set("fade", S.fade);
+    u.searchParams.set("lines", chartMode());
+    if (S.range) u.searchParams.set("range", S.range.map((v) => Math.round(v * 100)).join("-"));
+    if (heldPlayer()) u.searchParams.set("hold", heldPlayer());
+  }
   return u.toString();
 }
 
