@@ -684,6 +684,21 @@ select, input[type="text"] {
 .chartwrap { position: relative; width: 100%; }
 .chartwrap svg { display: block; overflow: visible; touch-action: pan-y; }
 
+/* Separate: one panel per player, each with its own axis */
+.facets { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px 18px; }
+.facet { min-width: 0; }
+.facet h3 {
+  margin: 0 0 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  font-size: 14px; font-weight: 800; line-height: 1.3;
+}
+.facet h3 span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facet h3 em {
+  font-style: normal; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.facet h3 em.up { color: var(--good); }
+.facet h3 em.down { color: var(--crit); }
+
 .chip.swatch i {
   width: 10px; height: 10px; border-radius: 3px; background: var(--sw);
   display: inline-block; align-self: center;
@@ -1066,6 +1081,8 @@ td .dot {
   .ratingside .impact { max-height: 520px; }
   /* the chart stays put while the list scrolls beside it */
   .ratingmain { position: sticky; top: 118px; }
+  /* the panel grid is taller than the screen, so it scrolls with the page */
+  .ratinglayout.faceted .ratingmain { position: static; }
 }
 
 /* ------------------------------------------------------- the data source */
@@ -4658,8 +4675,9 @@ function drawChart(series, roster, games) {
     + (S.fade ? ` · half-life ${S.fade} games` : "")
     + (heldPlayer() ? ` · ${heldPlayer()} held steady` : "")
     + (mode === "separate"
-        ? ` · one panel each, shared scale ${signed(data.lo, 0)} to ${signed(data.hi, 0)}`
+        ? ` · one panel each on a shared scale, biggest gain first`
         : S.shown.length > OVERLAY_MAX ? " · labelled at the line ends" : "");
+  $(".ratinglayout").classList.toggle("faceted", mode === "separate");
   (mode === "separate" ? drawFacets : drawOverlay)(host, series, roster, games, data);
 }
 
@@ -4776,75 +4794,107 @@ function drawOverlay(host, series, roster, games, data) {
   addCrosshair(svg, host, series, roster, { padT, ih, padL, iw, W, X, Y });
 }
 
-/* ---- four or more: small multiples, no colour discrimination needed ---- */
+/* ---- four or more: small multiples, no colour discrimination needed ----
+ *
+ * One panel per player, each with its own gridlines and date ticks, all on
+ * one shared scale so a taller climb really is a bigger one. The header says
+ * how far each player moved over the stretch on screen -- the number people
+ * come to this view for -- and the panels are ordered by it, biggest gain
+ * first. With one player held steady their line is drawn faintly, dashed,
+ * in everyone else's panel as the reference the others moved against. */
+function changeOver(line) {
+  const q = line.filter(Boolean);
+  return q.length > 1 ? { from: q[0], to: q[q.length - 1], d: q[q.length - 1].y - q[0].y } : null;
+}
+
 function drawFacets(host, series, roster, games, data) {
-  const W = Math.max(280, host.clientWidth || 320);
-  const padR = 44, rowH = 62, gap = 6, padB = 22, padT = 4;
-  const n = S.shown.length;
-  const H = padT + n * rowH + (n - 1) * gap + padB;
-
-  const svg = mk("svg", {
-    viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
-    "aria-label": "Rating over time, one panel per selected player",
-  }, host);
-
-  /* Each name is drawn to the left of its panel, ending 5px short of it, so
-     the gutter has to be as wide as the longest one. */
-  const padL = Math.min(Math.round(W * 0.45),
-                        Math.max(30, labelWidth(svg, S.shown, 11, 700) + 9));
-  const iw = W - padL - padR;
   const { pts, lo, hi } = data;
+  const held = heldPlayer(), hk = roster.indexOf(held);
+  const heldLine = held
+    ? series.map((s) => (s.games[hk] >= MIN_IN_WINDOW ? { x: s.i, y: s.beta[hk] } : null))
+    : null;
+  const grid = document.createElement("div");
+  grid.className = "facets";
+  host.appendChild(grid);
+
   const x0 = series[0].i, x1 = series[series.length - 1].i;
-  const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
+  const gain = (p) => { const c = changeOver(pts[p]); return c ? c.d : -Infinity; };
+  const order = S.shown.slice().sort((a, b) => gain(b) - gain(a));
+  const shortDate = (d) => { const [m, day, y] = d.split("/"); return `${m}/${day}/${String(y).slice(2)}`; };
 
-  // ordered by where each player stands now, so the stack itself ranks them
-  const order = S.shown.slice().sort((a, b) => {
-    const la = pts[a].filter(Boolean), lb = pts[b].filter(Boolean);
-    return (lb.length ? lb[lb.length - 1].y : -99) - (la.length ? la[la.length - 1].y : -99);
-  });
+  order.forEach((p) => {
+    const cell = document.createElement("div");
+    cell.className = "facet";
+    grid.appendChild(cell);
+    const c = changeOver(pts[p]);
+    const cls = !c || p === held ? "" : c.d > 0.05 ? "up" : c.d < -0.05 ? "down" : "";
+    const what = p === held ? "held steady"
+      : c ? `${signed(c.d)} since ${shortDate(games[c.from.x].date)}` : "too few games here";
+    cell.innerHTML = `<h3><span>${esc(p)}</span><em class="${cls}">${what}</em></h3>`;
+    const wrap = document.createElement("div");
+    wrap.className = "chartwrap";
+    cell.appendChild(wrap);
 
-  order.forEach((p, k) => {
-    const top = padT + k * (rowH + gap);
-    const Y = (v) => top + (hi - v) / (hi - lo) * rowH;
-    mk("rect", { x: padL, y: top, width: iw, height: rowH, fill: "var(--sunk)", rx: 3 }, svg);
-    if (lo < 0 && hi > 0)
-      mk("line", { x1: padL, x2: padL + iw, y1: Y(0), y2: Y(0), stroke: "var(--rule-2)", "stroke-width": 1 }, svg);
+    const W = Math.max(220, wrap.clientWidth || 300), H = 140;
+    const svg = mk("svg", {
+      viewBox: `0 0 ${W} ${H}`, width: "100%", height: H, role: "img",
+      "aria-label": `${p}'s rating over time` + (c && p !== held ? `, ${signed(c.d)} over this stretch` : ""),
+    }, wrap);
+    const padL = 30, padR = 10, padT = 8, padB = 22;
+    const iw = W - padL - padR, ih = H - padT - padB;
+    const X = (v) => padL + (x1 === x0 ? iw / 2 : (v - x0) / (x1 - x0) * iw);
+    const Y = (v) => padT + (hi - v) / (hi - lo) * ih;
 
-    let d = "", pen = false, lastQ = null;
-    for (const q of pts[p]) {
-      if (!q) { pen = false; continue; }
-      d += (pen ? "L" : "M") + X(q.x).toFixed(1) + " " + Y(q.y).toFixed(1) + " ";
-      pen = true; lastQ = q;
+    const step = niceStep(hi - lo);
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) {
+      mk("line", { x1: padL, x2: padL + iw, y1: Y(v), y2: Y(v), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+      mk("text", {
+        x: padL - 6, y: Y(v) + 3.5, "text-anchor": "end", fill: "var(--ink-3)",
+        "font-size": 9.5, "font-family": "var(--mono)",
+      }, svg).textContent = Math.abs(v) < 1e-9 ? "0" : signed(v, 0);
     }
+    if (lo < 0 && hi > 0)
+      mk("line", { x1: padL, x2: padL + iw, y1: Y(0), y2: Y(0), stroke: "var(--rule-2)", "stroke-width": 1.5 }, svg);
+    dateTicks(series, games, iw).forEach((tk) => {
+      const [m, , y] = tk.date.split("/");
+      mk("text", {
+        x: X(tk.i), y: H - 6, "text-anchor": "middle", fill: "var(--ink-3)",
+        "font-size": 9.5, "font-family": "var(--mono)",
+      }, svg).textContent = `${m}/${String(y).slice(2)}`;
+    });
+
+    const pathOf = (line) => {
+      let d = "", pen = false;
+      for (const q of line) {
+        if (!q) { pen = false; continue; }
+        d += (pen ? "L" : "M") + X(q.x).toFixed(1) + " " + Y(q.y).toFixed(1) + " ";
+        pen = true;
+      }
+      return d;
+    };
+    if (heldLine && p !== held)
+      mk("path", { d: pathOf(heldLine), fill: "none", stroke: "var(--ink-3)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }, svg);
     mk("path", {
-      d, fill: "none", stroke: "var(--court)", "stroke-width": 1.8,
+      d: pathOf(pts[p]), fill: "none", stroke: "var(--court)", "stroke-width": 2,
       "stroke-linejoin": "round", "stroke-linecap": "round",
     }, svg);
-    if (lastQ) {
-      mk("circle", { cx: X(lastQ.x), cy: Y(lastQ.y), r: 3, fill: "var(--court)", stroke: "var(--card)", "stroke-width": 1.5 }, svg);
-      mk("text", {
-        x: padL + iw + 5, y: Y(lastQ.y) + 3.5, fill: "var(--ink)",
-        "font-size": 10.5, "font-weight": 700, "font-family": "var(--mono)",
-      }, svg).textContent = signed(lastQ.y);
+    if (c) {
+      // hollow where the stretch starts, filled where it ends
+      mk("circle", { cx: X(c.from.x), cy: Y(c.from.y), r: 3, fill: "var(--card)", stroke: "var(--court)", "stroke-width": 1.5 }, svg);
+      mk("circle", { cx: X(c.to.x), cy: Y(c.to.y), r: 3.5, fill: "var(--court)", stroke: "var(--card)", "stroke-width": 2 }, svg);
     }
-    mk("text", {
-      x: padL - 5, y: top + 12, "text-anchor": "end", fill: "var(--ink)",
-      "font-size": 11, "font-weight": 700,
-    }, svg).textContent = p;
-  });
-
-  // one shared x axis under the stack
-  dateTicks(series, games, iw).forEach((tk) => {
-    const [m, , y] = tk.date.split("/");
-    mk("text", {
-      x: X(tk.i), y: H - 7, "text-anchor": "middle", fill: "var(--ink-3)",
-      "font-size": 10, "font-family": "var(--mono)",
-    }, svg).textContent = `${m}/${String(y).slice(2)}`;
+    addCrosshair(svg, wrap, series, roster, {
+      padT, ih, padL, iw, W, X, Y,
+      players: heldLine && p !== held ? [p, held] : [p],
+      color: (q) => (q === p ? "var(--court)" : "var(--ink-3)"),
+    });
   });
 }
 
-/** Crosshair + tooltip, for the overlay form. */
+/** Crosshair + tooltip: across every line in the overlay form, or one
+ *  panel's own players (g.players) in the faceted one. */
 function addCrosshair(svg, host, series, roster, g) {
+  const colorOf = g.color || seriesColor;
   const hair = mk("line", {
     y1: g.padT, y2: g.padT + g.ih, stroke: "var(--ink-3)", "stroke-width": 1,
     opacity: 0, "pointer-events": "none",
@@ -4868,11 +4918,11 @@ function addCrosshair(svg, host, series, roster, g) {
     hair.setAttribute("opacity", .45);
     dots.innerHTML = ""; dots.setAttribute("opacity", 1);
     const lines = [];
-    for (const p of S.shown) {
+    for (const p of g.players || S.shown) {
       const i = roster.indexOf(p);
       if (s.games[i] < MIN_IN_WINDOW) continue;
       mk("circle", {
-        cx: g.X(s.i), cy: g.Y(s.beta[i]), r: 4, fill: seriesColor(p),
+        cx: g.X(s.i), cy: g.Y(s.beta[i]), r: 4, fill: colorOf(p),
         stroke: "var(--card)", "stroke-width": 2,
       }, dots);
       lines.push([p, s.beta[i]]);
@@ -4880,7 +4930,7 @@ function addCrosshair(svg, host, series, roster, g) {
     highlightImpact(s.i);
     lines.sort((a, b) => b[1] - a[1]);
     tip.innerHTML = `<b>${esc(s.date)}</b>` + lines.map(([p, v]) =>
-      `<span><i style="background:${seriesColor(p)}"></i>${esc(p)}<em>${signed(v)}</em></span>`).join("");
+      `<span><i style="background:${colorOf(p)}"></i>${esc(p)}<em>${signed(v)}</em></span>`).join("");
     tip.hidden = false;
     const r2 = svg.getBoundingClientRect();
     tip.style.left = Math.min(Math.max(g.X(s.i) * (r2.width / g.W), 8), r2.width - 8) + "px";
