@@ -4565,10 +4565,9 @@ function ratingNote(drawn, roster) {
     `<b>${w}</b>${h}. A line breaks where someone has fewer than ${MIN_IN_WINDOW} ` +
     `games${S.fade ? "&rsquo; worth of weight" : ""} inside the window &mdash; ridge would ` +
     `pull them to zero, which reads as "average" when it means "wasn't there". ` +
-    `<b>The shaded band is how sure the rating is</b>: luck in the scores could put it ` +
-    `anywhere inside, 9 times in 10. It narrows with games played and widens when ` +
-    `someone is away. In Separate, the &plusmn; on each change works the same way, and the change ` +
-    `is coloured only when that range stays clear of zero &mdash; grey means it could be luck.` +
+    `In Separate, each change carries a &plusmn; &mdash; luck in the scores could move it that ` +
+    `far, 9 times in 10 &mdash; and is coloured only when that range stays clear of zero: ` +
+    `grey means it could be luck.` +
     (off.length ? ` Not plotted: <b>${esc(off.join(", "))}</b>, under ${chartMinGames()} ` +
       `games in the log.` : "");
 }
@@ -4759,37 +4758,12 @@ function chartData(series, roster) {
   for (const p of S.shown) {
     const i = roster.indexOf(p);
     pts[p] = series.map((s, k) => (s.games[i] >= MIN_IN_WINDOW
-      ? { x: s.i, y: s.beta[i], s: s.sd ? s.sd[i] : 0, k } : null));
-    // the scale follows the lines, not the bands: a band four games into
-    // someone's record is wide enough to flatten everyone else's line, so the
-    // plot clips it instead -- running off the edge is the message anyway
+      ? { x: s.i, y: s.beta[i], k } : null));
     pts[p].forEach((q) => { if (q) { lo = Math.min(lo, q.y); hi = Math.max(hi, q.y); } });
   }
   if (!isFinite(lo)) return null;
   const pad = Math.max(0.4, (hi - lo) * 0.12);
   return { pts, lo: lo - pad, hi: hi + pad };
-}
-
-/** The 90% band around a line, as a clipped, filled path behind it: one
- *  closed shape per unbroken run of the line. */
-let BAND_ID = 0;
-function drawBand(svg, line, X, Y, box, fill, opacity) {
-  let d = "";
-  let run = [];
-  const flush = () => {
-    if (run.length > 1) {
-      d += "M" + run.map((q) => `${X(q.x).toFixed(1)} ${Y(q.y + BAND_Z * q.s).toFixed(1)}`).join(" L") +
-        " L" + run.slice().reverse().map((q) => `${X(q.x).toFixed(1)} ${Y(q.y - BAND_Z * q.s).toFixed(1)}`).join(" L") + " Z ";
-    }
-    run = [];
-  };
-  for (const q of line) { if (q && q.s > 0) run.push(q); else flush(); }
-  flush();
-  if (!d) return;
-  const id = "band" + (++BAND_ID);
-  const clip = mk("clipPath", { id }, svg);
-  mk("rect", { x: box.x, y: box.y, width: box.w, height: box.h }, clip);
-  mk("path", { d, fill, opacity, stroke: "none", "clip-path": `url(#${id})` }, svg);
 }
 
 /** Date ticks, thinned to fit. */
@@ -4824,7 +4798,6 @@ function drawChart(series, roster, games) {
     `Points per game added to your team · ${S.window ? "trailing " + S.window + " games" : "whole log"}`
     + (S.fade ? ` · half-life ${S.fade} games` : "")
     + (heldPlayer() ? ` · ${heldPlayer()} held steady` : "")
-    + (mode === "separate" || S.shown.length <= 2 ? " · shaded: 90% range" : "")
     + (mode === "separate"
         ? ` · one panel each on a shared scale, biggest gain first`
         : S.shown.length > OVERLAY_MAX ? " · labelled at the line ends" : "");
@@ -4892,12 +4865,6 @@ function drawOverlay(host, series, roster, games, data) {
       "font-size": 10, "font-family": "var(--mono)",
     }, svg).textContent = `${m}/${String(y).slice(2)}`;
   });
-
-  // bands only where they can be told apart: two overlapping tints still read,
-  // three or more turn into one muddy wash
-  if (S.shown.length <= 2)
-    for (const p of S.shown)
-      drawBand(svg, pts[p], X, Y, { x: padL, y: padT, w: iw, h: ih }, seriesColor(p), 0.14);
 
   const ends = [];
   for (const p of S.shown) {
@@ -5035,7 +5002,6 @@ function drawFacets(host, series, roster, games, data) {
       }
       return d;
     };
-    drawBand(svg, pts[p], X, Y, { x: padL, y: padT, w: iw, h: ih }, "var(--court)", 0.16);
     if (heldLine && p !== held)
       mk("path", { d: pathOf(heldLine), fill: "none", stroke: "var(--ink-3)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }, svg);
     mk("path", {
@@ -5089,13 +5055,12 @@ function addCrosshair(svg, host, series, roster, g) {
         cx: g.X(s.i), cy: g.Y(s.beta[i]), r: 4, fill: colorOf(p),
         stroke: "var(--card)", "stroke-width": 2,
       }, dots);
-      lines.push([p, s.beta[i], s.sd ? s.sd[i] : 0]);
+      lines.push([p, s.beta[i]]);
     }
     highlightImpact(s.i);
     lines.sort((a, b) => b[1] - a[1]);
-    tip.innerHTML = `<b>${esc(s.date)}</b>` + lines.map(([p, v, sd]) =>
-      `<span><i style="background:${colorOf(p)}"></i>${esc(p)}<em>${signed(v)}` +
-      (sd > 0 ? ` <small>±${(BAND_Z * sd).toFixed(1)}</small>` : "") + `</em></span>`).join("");
+    tip.innerHTML = `<b>${esc(s.date)}</b>` + lines.map(([p, v]) =>
+      `<span><i style="background:${colorOf(p)}"></i>${esc(p)}<em>${signed(v)}</em></span>`).join("");
     tip.hidden = false;
     const r2 = svg.getBoundingClientRect();
     tip.style.left = Math.min(Math.max(g.X(s.i) * (r2.width / g.W), 8), r2.width - 8) + "px";
