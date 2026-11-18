@@ -495,6 +495,7 @@ table.tally tr:last-child td { border-bottom: 0; }
   font-size: 12px; color: var(--ink-2); margin-top: 4px;
   font-family: var(--mono); font-variant-numeric: tabular-nums;
 }
+.mmeta .mexp b { color: var(--ink); font-weight: 700; }
 .mmeta .pos { color: var(--good); font-weight: 700; }
 .mmeta .neg { color: var(--crit); font-weight: 700; }
 
@@ -1427,8 +1428,8 @@ td .dot {
     <h2>Every matchup</h2>
     <p class="note">Every way to split the players with at least <b id="matchupMinNote">20</b>
     games into two teams of two &mdash; whether you have actually played it or
-    not. Quality comes from current form; everything else is what actually
-    happened.</p>
+    not. Quality and the likely score come from current form; everything else
+    is what actually happened.</p>
 
     <div class="chips" id="matchupPick"></div>
 
@@ -1873,6 +1874,29 @@ function soExpectedScore(p, target = 11, serveEdge = 0, maxExtra = 12) {
   const hit = _esCache.get(key);
   if (hit) return hit;
 
+  let ea = 0, eb = 0, seen = 0;
+  finishedScores(p, target, serveEdge, maxExtra, (a, b, m) => { ea += a * m; eb += b * m; seen += m; });
+  const out = seen > 0 ? [ea / seen, eb / seen] : [0, 0];
+  if (_esCache.size > 400) _esCache.clear();
+  _esCache.set(key, out);
+  return out;
+}
+
+/**
+ * Every way the game can finish, as [A's score, B's score, probability],
+ * renormalised the same way as soExpectedScore. What an average hides: how
+ * often each side wins at all, and how spread out the loser's score is.
+ */
+function soScoreDist(p, target = 11, serveEdge = 0, maxExtra = 12) {
+  const out = [];
+  let seen = 0;
+  finishedScores(p, target, serveEdge, maxExtra, (a, b, m) => { out.push([a, b, m]); seen += m; });
+  return seen > 0 ? out.map(([a, b, m]) => [a, b, m / seen]) : out;
+}
+
+/** The forward pass both of the above share: calls visit(a, b, mass) once for
+ *  each finished scoreline, in a fixed order. */
+function finishedScores(p, target, serveEdge, maxExtra, visit) {
   const [pa, pb] = rallyProbs(Math.min(Math.max(p, 1e-9), 1 - 1e-9), serveEdge);
   const [FA, FB] = pointFlow(pa, pb);
   const T = target, cap = T + maxExtra;
@@ -1882,7 +1906,6 @@ function soExpectedScore(p, target = 11, serveEdge = 0, maxExtra = 12) {
   pi[0][0][SO_B2] = 0.5;
   const over = (a, b) => (a >= T && a - b >= 2) || (b >= T && b - a >= 2);
 
-  let ea = 0, eb = 0, seen = 0;
   for (let tot = 0; tot <= 2 * cap; tot++) {
     for (let a = Math.min(tot, cap); a >= 0; a--) {
       const b = tot - a;
@@ -1890,7 +1913,7 @@ function soExpectedScore(p, target = 11, serveEdge = 0, maxExtra = 12) {
       const v = pi[a][b];
       const m = v[0] + v[1] + v[2] + v[3];
       if (m <= 0) continue;
-      if (over(a, b)) { ea += a * m; eb += b * m; seen += m; continue; }
+      if (over(a, b)) { visit(a, b, m); continue; }
       for (let s2 = 0; s2 < 4; s2++) {
         let toA = 0, toB = 0;
         for (let s = 0; s < 4; s++) {
@@ -1903,10 +1926,6 @@ function soExpectedScore(p, target = 11, serveEdge = 0, maxExtra = 12) {
       pi[a][b] = [0, 0, 0, 0];
     }
   }
-  const out = seen > 0 ? [ea / seen, eb / seen] : [0, 0];
-  if (_esCache.size > 400) _esCache.clear();
-  _esCache.set(key, out);
-  return out;
 }
 
 
@@ -2376,6 +2395,43 @@ function winProbFromMargin(m, target) {
   const { lo, hi, f } = atMargin(m, target);
   const w = ws[lo] + f * (ws[hi] - ws[lo]);
   return m < 0 ? 1 - w : w;
+}
+
+/**
+ * How a game with this predicted margin is likely to finish, from the
+ * favourite's side: { pWin, score: [favourite, other], range: [lo, hi] }.
+ *
+ * An average score (about 9-9 for an even game) is no scoreline anyone plays
+ * to, so this answers the question the other way round: the favourite wins to
+ * the target, and `score[1]` is the other side's median score in the games the
+ * favourite wins; `range` is the middle half of it. That score barely moves
+ * with the margin -- 7 for a coin flip, 6 at a 3-point favourite -- and the
+ * spread around it is wide, so pWin, how often the favourite wins at all, is
+ * the number that actually tells matchups apart and is always shown with it.
+ *
+ * Solved exactly off the side-out score lattice rather than a sampled table:
+ * ~0.1 ms a matchup, and cached by margin so a re-render costs nothing.
+ */
+const _likely = new Map();
+function likelyScore(m, target) {
+  const key = `${target}|${Math.abs(m).toFixed(4)}`;
+  const hit = _likely.get(key);
+  if (hit) return hit;
+  const d = soScoreDist(pFromMargin(Math.abs(m), target), target, SERVE_EDGE);
+  // in a win the other side's score fixes the scoreline (11-b, or b+2 to b
+  // past deuce), so sorting the wins by it gives that score's distribution
+  const wins = d.filter(([a, b]) => a > b).sort((x, y) => x[1] - y[1]);
+  const pWin = wins.reduce((t, w) => t + w[2], 0);
+  const at = (f) => {
+    let c = 0;
+    for (const [, b, q] of wins) { c += q; if (c >= f * pWin - 1e-12) return b; }
+    return wins[wins.length - 1][1];
+  };
+  const mid = at(0.5);
+  const out = { pWin, score: [Math.max(target, mid + 2), mid], range: [at(0.25), at(0.75)] };
+  if (_likely.size > 2000) _likely.clear();
+  _likely.set(key, out);
+  return out;
 }
 
 /* ==================================================================== state */
@@ -5154,7 +5210,9 @@ const orientByRate = (a, b, rate) =>
  */
 function matchupRow(pair, rate, games) {
   const { a, b } = orientByRate(pair.a, pair.b, rate);
-  const winProb = winProbFromMargin(marginOfRate(a, b, rate), S.target);
+  const margin = marginOfRate(a, b, rate);
+  const winProb = winProbFromMargin(margin, S.target);
+  const likely = likelyScore(margin, S.target);
   const quality = Math.round(100 * (1 - 2 * Math.abs(winProb - 0.5)));
 
   const key = matchKey(a, b);
@@ -5166,7 +5224,7 @@ function matchupRow(pair, rate, games) {
     if (sa > sb) wa++; else wb++;
     last = { sa, sb, date: g.date };            // games() is chronological
   }
-  return { a, b, quality, played: hist.length, wa, wb, last };
+  return { a, b, quality, likely, played: hist.length, wa, wb, last };
 }
 
 /** All rows, closest matchup first so the best games lead; ties on that go to
@@ -5193,6 +5251,14 @@ function matchupPasses(row, sel) {
   const four = row.a.concat(row.b);
   if (sel.length > 4) return four.every((p) => sel.includes(p));
   return sel.every((p) => four.includes(p));
+}
+
+/** "likely 11–7 · 62% to win · other side 4–8 half the time", favourite first. */
+function likelyHTML(l) {
+  const pct = l.pWin > 0.995 ? ">99" : String(Math.round(100 * l.pWin));
+  const [lo, hi] = l.range;
+  return `<span class="mexp">likely <b>${l.score[0]}–${l.score[1]}</b> &middot; ` +
+    `<b>${pct}%</b> to win &middot; other side ${lo === hi ? lo : `${lo}–${hi}`} half the time</span>`;
 }
 
 function renderMatchups() {
@@ -5246,6 +5312,7 @@ function renderMatchups() {
         <span class="mteams">${teamHTML(r.a)}<i class="v"> v </i>${teamHTML(r.b)}</span>
         <span class="qnum ${band}">${r.quality}</span>
       </div>
+      <div class="mmeta">${likelyHTML(r.likely)}</div>
       <div class="mmeta">${meta}</div>
     </div>`;
   }).join("");
@@ -5253,7 +5320,12 @@ function renderMatchups() {
   $("#matchupFoot").textContent = shown.length
     ? "Record and last score put the team current form favours first, not "
       + "however the sheet happened to log them. Green: that side is also "
-      + "ahead head-to-head; red: the other side actually leads the history."
+      + "ahead head-to-head; red: the other side actually leads the history. "
+      + "Likely is the first pair winning, with the other side's middle score "
+      + "in the games the first pair wins; the percentage is how often they win "
+      + "at all, and the range is where the other side ends up half the time "
+      + "when they do (" + (S.target - 1) + " or more means it went past "
+      + (S.target - 1) + "–" + (S.target - 1) + ")."
     : "Nobody left once the filter is applied.";
 }
 
